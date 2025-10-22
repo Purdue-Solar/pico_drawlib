@@ -8,7 +8,7 @@
 #include <string.h>
 #include "hardware/gpio.h"
 
-#include "st7789.hpp"
+#include "st7789.h"
 #include <pico/time.h>
 
 static struct st7789_config st7789_cfg;
