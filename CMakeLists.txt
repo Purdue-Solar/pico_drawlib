@@ -57,6 +57,7 @@ target_link_libraries(pico_canlib
 # Add the standard include files to the build
 target_include_directories(pico_canlib PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/Inc
+        ${CMAKE_CURRENT_LIST_DIR}/Src/lcd-st7789-library/src/lcd_driver
         ${CMAKE_CURRENT_LIST_DIR}/Src/mcufont_decoder
 )
 
