@@ -79,6 +79,16 @@ void ILI9341_SetCommand(const ili9341_config_t *pconfig, uint8_t cmd)
     ILI9341_CS_Set(pconfig, CS_DISABLE);
 }
 
+void ILI9341_SetWriteCommand(const ili9341_config_t *pconfig) 
+{
+    uint8_t cmd = 0x2c;
+    gpio_put(pconfig->mGPIO_dc, 0);
+    asm volatile("nop \n nop \n nop");
+    spi_write_blocking(pconfig->mpSPIPort, &cmd, 1);
+    gpio_put(pconfig->mGPIO_dc, 1);
+}
+
+
 void ILI9341_CommandParam(const ili9341_config_t *pconfig, uint8_t data) 
 {
     ILI9341_CS_Set(pconfig, CS_ENABLE);
@@ -119,8 +129,10 @@ void ILI9341_SetOutWriting(const ili9341_config_t *pconfig,
     ILI9341_CommandParam(pconfig, end_page & 0xFF);
 
     // Start writing.
-    ILI9341_SetCommand(pconfig, ILI9341_RAMWR);
-
+    // ILI9341_SetCommand(pconfig, ILI9341_RAMWR);
+    
+    ILI9341_CS_Set(pconfig, CS_ENABLE);
+    ILI9341_SetWriteCommand(pconfig);
     // ...Need further writing in accordance with volume has set.
 }
 
@@ -130,7 +142,8 @@ void ILI9341_SetOutWriting(const ili9341_config_t *pconfig,
 /// @param bytes Size of the buffer in bytes.
 void ILI9341_WriteData(const ili9341_config_t *pconfig, void *buffer,int bytes)
 {
-    ILI9341_CS_Set(pconfig, CS_ENABLE);
+    // ILI9341_CS_Set(pconfig, CS_ENABLE);
+
     spi_write_blocking(pconfig->mpSPIPort, buffer, bytes);
     ILI9341_CS_Set(pconfig, CS_DISABLE);
 }
