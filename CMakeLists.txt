@@ -6,6 +6,12 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(IS_SIMULATION "To enable simulation" ON)
+
+if(${IS_SIMULATION})
+include(simulation.cmake)
+else()
+
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 
@@ -57,11 +63,14 @@ target_link_libraries(pico_canlib
 # Add the standard include files to the build
 target_include_directories(pico_canlib PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/Inc
-        ${CMAKE_CURRENT_LIST_DIR}/Src/lcd-st7789-library/src/lcd_driver
-        ${CMAKE_CURRENT_LIST_DIR}/Src/mcufont_decoder
 )
+
+# get_target_property(PICO_INCLUDES pico_stdio_headers INTERFACE_INCLUDE_DIRECTORIES)
+# message(STATUS "Pico SDK includes: ${PICO_INCLUDES}")
 
 # Add any user requested libraries
 target_link_libraries(pico_canlib hardware_spi hardware_uart hardware_timer)
 
 pico_add_extra_outputs(pico_canlib)
+
+endif()

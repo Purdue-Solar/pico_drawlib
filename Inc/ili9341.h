@@ -1,187 +1,110 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-//  Roman Piksaykin [piksaykin@gmail.com], R2BDY
-//  https://www.qrz.com/db/r2bdy
-//
-///////////////////////////////////////////////////////////////////////////////
-//
-//
-//  ili9341.h - ILI9341-based display library (MSP2807 etc).
-// 
-//
-//  DESCRIPTION
-//
-//      The library provides a memory efficient set of functions
-//  to work with ILI9341-based display 320x240 pixels.
-//
-//      It implements screen buffer which consists of two planes : graphics
-//  and color. The size of the buffer is 10800 bytes. Most of text, menus
-//  and technoir graphics look quite the same as original mode which 
-//  consumes 320*240*2 = 153600 bytes. The formula for proposed mode is:
-//  320*240/8 + (320/8)*(240/8) = 10800.
-//  ^-B/W plane 1bpp; ^^^^^^^^^-color plane as a set of boxes of 8x8 pixels.
-//
-//      The screen is being updated selectively using `change detection` algo.
-//
-//      It implements boxy color plane which mimics Zx-Spectrum screen memory
-//  structure.
-//
-//      8x8 bitmap font is being used.
-//
-//  PLATFORM
-//      Raspberry Pi pico.
-//
-//  REVISION HISTORY
-// 
-//      Rev 0.99   05 Jan 2023
-//  Initial release.
-//
-//  LICENCE
-//      MIT License (http://www.opensource.org/licenses/mit-license.php)
-//
-//  Copyright (c) 2023 by Roman Piksaykin
-//  
-//  Permission is hereby granted, free of charge,to any person obtaining a copy
-//  of this software and associated documentation files (the Software), to deal
-//  in the Software without restriction,including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY,WHETHER IN AN ACTION OF CONTRACT,TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-///////////////////////////////////////////////////////////////////////////////
-#ifndef _ILI9341_H
-#define _ILI9341_H
+#ifndef ILI9341_H
+#define ILI9341_H
 
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
+#ifdef SIMULATION
+#include "picosdk_sim.h"
+#else
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
+#endif
 
-#include "myassert.h"
+// Use DMA?
+//#define USE_DMA 1
 
-#include "ili9341hw.h"
-#include "font_8x8.h"
-
-#define GET_DATA_BIT(p, n)  ((*((uint32_t *)(p) + ((n) >> 5)) \
-        >> (31 - ((n) & 31))) & 1)
-#define SET_DATA_BIT(p, n)  (*((uint32_t *)(p) + ((n) >> 5)) \
-        |= (0x80000000 >> ((n) & 31)))
-#define CLR_DATA_BIT(p, n)  (*((uint32_t *)(p) + ((n) >> 5)) \
-        &=~(0x80000000 >> ((n) & 31)))
-
-typedef enum 
-{
-    kBlack,
-    kBlue,
-    kRed,
-    kMagenta,
-    kGreen,
-    kCyan,
-    kYellow,
-    kWhite
-} color_t;
-
-typedef struct 
-{
-    spi_inst_t *mpSPIPort;
-
-    int mGPIO_miso;
-    int mGPIO_cs;
-    int mGPIO_sck;
-    int mGPIO_mosi;
-    int mGPIO_reset;
-    int mGPIO_dc;
-
-} ili9341_config_t;
-
-typedef struct
-{
-    ili9341_config_t *mpHWConfig;           // Device hardware config.
-
-    int16_t mCursorX;                       // Cursor-
-    int16_t mCursorY;                       // position.
-    uint8_t mCursorType;                    // Not yet implemented. [*]
-
-    color_t mCanvasPaper;                   // Default- 
-    color_t mCanvasInk;                     // canvas colors.
-
-    uint32_t mpPixBuffer[PIX_W32COUNT];     // Black-white 1bpp canvas.
-
-    uint8_t mpColorBuffer[TEXT_CHARCOUNT];  // 8x8 block attributes:
-                                // Flash|Changed|Pap2|Pap1|Pap0|Ink2|Ink1|Ink0.
-                                // `Flash' blinking attribute (cursors) [*].
-                                // `Changed` need to send to device flag.
-                                // `Paper` color, `Ink` color [0..7].
-} screen_control_t;
-
-/* Hardware I/O low level operations. */
-static inline void ILI9341_CS_Set(const ili9341_config_t *pconfig, int state);
-
-void ILI9341_Init(ili9341_config_t *pconfig, spi_inst_t *pspi_port, 
-                    int spi_clock_freq, int gpio_MISO, int gpio_CS, 
-                    int gpio_SCK, int gpio_MOSI, int gpio_RS, int gpio_DC);
-
-void ILI9341_SetCommand(const ili9341_config_t *pconfig, uint8_t cmd);
-void ILI9341_CommandParam(const ili9341_config_t *pconfig,uint8_t data);
-
-void ILI9341_SetOutWriting(const ili9341_config_t *pconfig,
-                            const int start_col, const int end_col,
-                            const int start_page,const int end_page);
-
-void ILI9341_WriteData(const ili9341_config_t *pconfig,void *buffer,int bytes);
+#define MADCTL_MY 0x80  ///< Bottom to top
+#define MADCTL_MX 0x40  ///< Right to left
+#define MADCTL_MV 0x20  ///< Reverse Mode
+#define MADCTL_ML 0x10  ///< LCD refresh Bottom to top
+#define MADCTL_RGB 0x00 ///< Red-Green-Blue pixel order
+#define MADCTL_BGR 0x08 ///< Blue-Green-Red pixel order
+#define MADCTL_MH 0x04  ///< LCD refresh right to left
 
 
-/* Screen buffer operations - text &. */
-void TftClearScreenBuffer(screen_control_t *pscr, color_t paper, color_t ink);
-void TftSetCursor(screen_control_t *pscr, int x, int y);
+#define ILI9341_TFTWIDTH 240  ///< ILI9341 max TFT width
+#define ILI9341_TFTHEIGHT 320 ///< ILI9341 max TFT height
 
-void TftPutChar(screen_control_t *pscr, int x, int y, int paper, int ink, 
-                char chr);
+#define ILI9341_NOP 0x00     ///< No-op register
+#define ILI9341_SWRESET 0x01 ///< Software reset register
+#define ILI9341_RDDID 0x04   ///< Read display identification information
+#define ILI9341_RDDST 0x09   ///< Read Display Status
 
-void TftPutColorAttr(screen_control_t *pscr, int x, int y, int paper, int ink);
+#define ILI9341_SLPIN 0x10  ///< Enter Sleep Mode
+#define ILI9341_SLPOUT 0x11 ///< Sleep Out
+#define ILI9341_PTLON 0x12  ///< Partial Mode ON
+#define ILI9341_NORON 0x13  ///< Normal Display Mode ON
 
-void TftPutString(screen_control_t *pscr, const char* str, int top_y, 
-                int bot_y, int paper, int ink);
+#define ILI9341_RDMODE 0x0A     ///< Read Display Power Mode
+#define ILI9341_RDMADCTL 0x0B   ///< Read Display MADCTL
+#define ILI9341_RDPIXFMT 0x0C   ///< Read Display Pixel Format
+#define ILI9341_RDIMGFMT 0x0D   ///< Read Display Image Format
+#define ILI9341_RDSELFDIAG 0x0F ///< Read Display Self-Diagnostic Result
 
-void TftPrintf(screen_control_t *pscr, int top_y, int bot_y, int paper,
-                int ink, const char* str, ...);
+#define ILI9341_INVOFF 0x20   ///< Display Inversion OFF
+#define ILI9341_INVON 0x21    ///< Display Inversion ON
+#define ILI9341_GAMMASET 0x26 ///< Gamma Set
+#define ILI9341_DISPOFF 0x28  ///< Display OFF
+#define ILI9341_DISPON 0x29   ///< Display ON
 
-void TftScrollVerticalZone(screen_control_t *pscr, int top_y, int bot_y);
+#define ILI9341_CASET 0x2A ///< Column Address Set
+#define ILI9341_PASET 0x2B ///< Page Address Set
+#define ILI9341_RAMWR 0x2C ///< Memory Write
+#define ILI9341_RAMRD 0x2E ///< Memory Read
 
-/* Screen buffer operations - graphics. */
-void TftPutPixel(screen_control_t *pscr, int x, int y, color_t paper,color_t ink);
-void TftPutLine(screen_control_t *pscr, int x0, int y0, int x1, int y1);
-void TftPutTextLabel(screen_control_t *pscr, const char *pstr, int x_pix, 
-                    int y_pix, bool over);
-void TftClearRect8(screen_control_t *pscr, int x, int y);
+#define ILI9341_PTLAR 0x30    ///< Partial Area
+#define ILI9341_VSCRDEF 0x33  ///< Vertical Scrolling Definition
+#define ILI9341_MADCTL 0x36   ///< Memory Access Control
+#define ILI9341_VSCRSADD 0x37 ///< Vertical Scrolling Start Address
+#define ILI9341_PIXFMT 0x3A   ///< COLMOD: Pixel Format Set
 
-/* Hardware I/O operations. */
-void TftFullScreenWrite(screen_control_t *pscr);
-int TftFullScreenSelectiveWrite(screen_control_t *pscr, int nblock_max);
-void TftSymbolWrite(screen_control_t *pscr, int sym_x, int sym_y);
+#define ILI9341_FRMCTR1                                                        \
+  0xB1 ///< Frame Rate Control (In Normal Mode/Full Colors)
+#define ILI9341_FRMCTR2 0xB2 ///< Frame Rate Control (In Idle Mode/8 colors)
+#define ILI9341_FRMCTR3                                                        \
+  0xB3 ///< Frame Rate control (In Partial Mode/Full Colors)
+#define ILI9341_INVCTR 0xB4  ///< Display Inversion Control
+#define ILI9341_DFUNCTR 0xB6 ///< Display Function Control
 
-static const uint16_t spPalette[8] = 
-{
-    0x0000, // Black.
-    0x1F00, // Blue.
-    0x00F8, // Red.
-    0x1FF8, // Magenta.
-    0xE007, // Green 0,0xFF,0.
-    0xFF07, // Cyan 0xFF,0xFF,0.
-    0xE0FF, // Yellow 0xFF,0xFF,0.
-    0xffff  // White.
-};
+#define ILI9341_PWCTR1 0xC0 ///< Power Control 1
+#define ILI9341_PWCTR2 0xC1 ///< Power Control 2
+#define ILI9341_PWCTR3 0xC2 ///< Power Control 3
+#define ILI9341_PWCTR4 0xC3 ///< Power Control 4
+#define ILI9341_PWCTR5 0xC4 ///< Power Control 5
+#define ILI9341_VMCTR1 0xC5 ///< VCOM Control 1
+#define ILI9341_VMCTR2 0xC7 ///< VCOM Control 2
+
+#define ILI9341_RDID1 0xDA ///< Read ID 1
+#define ILI9341_RDID2 0xDB ///< Read ID 2
+#define ILI9341_RDID3 0xDC ///< Read ID 3
+#define ILI9341_RDID4 0xDD ///< Read ID 4
+
+#define ILI9341_GMCTRP1 0xE0 ///< Positive Gamma Correction
+#define ILI9341_GMCTRN1 0xE1 ///< Negative Gamma Correction
+
+// Some ready-made 16-bit ('565') color settings:
+#define ILI9341_BLACK 0x0000
+#define ILI9341_WHITE 0xFFFF
+#define ILI9341_RED 0xF800
+#define ILI9341_GREEN 0x07E0
+#define ILI9341_BLUE 0x001F
+#define ILI9341_CYAN 0x07FF
+#define ILI9341_MAGENTA 0xF81F
+#define ILI9341_YELLOW 0xFFE0
+#define ILI9341_ORANGE 0xFC00
+
+void LCD_setPins(uint16_t dc, uint16_t cs, int16_t rst, uint16_t sck, uint16_t tx);
+void LCD_setSPIperiph(spi_inst_t *s);
+void LCD_initDisplay();
+
+void LCD_setRotation(uint8_t m);
+
+void LCD_WritePixel(int x, int y, uint16_t col);
+void LCD_WriteBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);
+
+#ifdef SIMULATION
+void LCDSim_InitWindow(void);
+int LCDSim_WindowShouldClose(void);
+void LCDSim_CloseWindow(void);
+void LCDSim_Redraw(void);
+#endif
 
 #endif

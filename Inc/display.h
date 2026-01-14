@@ -1,8 +1,6 @@
 #ifndef DISPLAY
 #define DISPLAY
 
-#include "lcd_st7789_library.h"
-
 #define RGB(r, g, b) (((r) << 11) | ((g) << 5) | (b))
 
 #define COLOR_BLACK create_color(0, 0, 0)
