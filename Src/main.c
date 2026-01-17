@@ -32,10 +32,11 @@ int main() {
 #ifdef SIMULATION
     LCDSim_InitWindow();
 
-    while (!LCDSim_WindowShouldClose()) {
+    while (!LCDSim_WindowShouldClose())
 #else
-    while (true) {
+    while (true)
 #endif
+    {
         printf("EEEEE\n");
 
         int q = 0;

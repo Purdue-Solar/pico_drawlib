@@ -8,10 +8,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(IS_SIMULATION "To enable simulation" ON)
 
-if(${IS_SIMULATION})
-include(simulation.cmake)
-else()
-
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 
