@@ -6,7 +6,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(IS_SIMULATION "To enable simulation" ON)
+# option(IS_SIMULATION "To enable simulation" ON)
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
@@ -68,5 +68,3 @@ target_include_directories(pico_canlib PRIVATE
 target_link_libraries(pico_canlib hardware_spi hardware_uart hardware_timer)
 
 pico_add_extra_outputs(pico_canlib)
-
-endif()
