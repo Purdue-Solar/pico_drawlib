@@ -13,14 +13,7 @@
 
 int main()
 {
-    uint32_t send_id = 0x123;
-    uint32_t rec_id = 0;
-    uint8_t data[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
-    uint8_t recv_data[8];
-    uint8_t recv_len = 0;
-    bool led_state = false;
     stdio_init_all(); 
-    gpio_init(LED_PIN);
     
     gpio_init(R0);
     gpio_init(R1);
@@ -38,22 +31,19 @@ int main()
     gpio_set_dir(C3, GPIO_OUT);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
-    gpio_put(LED_PIN, led_state);
-    xl2515_init(KBPS125);
     while (true) {
-        printf("Hello, world!\n");
-        xl2515_send(send_id, data, 8);
-        if (xl2515_recv(&rec_id, recv_data, &recv_len))
-        {
-            printf("recv 0x%x: ", rec_id);
-            for (uint8_t i = 0; i < recv_len; i++)
+        for (int i = 0; i < 4; i++) {
+            gpio_put(C0, i==0);
+            gpio_put(C1, i==1);
+            gpio_put(C2, i==2);
+            gpio_put(C3, i==3);
+
+            if (gpio_get(R0) && i==3)
             {
-                printf("%02x ", recv_data[i]);
+                // Brights
             }
-            printf("\r\n");
+            sleep_ms(10);
+
         }
-        led_state = !led_state;
-        gpio_put(LED_PIN, led_state);
-        sleep_ms(1000);
     }
 }
