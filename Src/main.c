@@ -39,13 +39,13 @@ int main() {
     {
         printf("EEEEE\n");
 
-        int q = 0;
-        for (int y = 0; y < 200; y++) {
-            for (int x = 0; x < 200; x++) {
-                LCD_WritePixel(x, y, ILI9341_GREEN);
-                printf("%d\n", q++);
-            }
-        }
+        // int q = 0;
+        // for (int y = 0; y < 200; y++) {
+        //     for (int x = 0; x < 200; x++) {
+        //         LCD_WritePixel(x, y, ILI9341_GREEN);
+        //         printf("%d\n", q++);
+        //     }
+        // }
 
         gpio_put(PICO_DEFAULT_LED_PIN, led_on);
         // gpio_put(22, led_on);
