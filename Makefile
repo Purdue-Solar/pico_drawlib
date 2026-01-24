@@ -2,7 +2,7 @@
 
 CC = clang
 LIBS = raylib
-CFLAGS = -DSIMULATION -Iinc -Isim $(shell pkg-config --cflags $(LIBS))
+CFLAGS = -DSIMULATION -IInc -ISim $(shell pkg-config --cflags $(LIBS))
 LFLAGS = $(shell pkg-config --libs $(LIBS))
 
 SRCS = $(wildcard Sim/*.c) $(wildcard Src/*.c)
