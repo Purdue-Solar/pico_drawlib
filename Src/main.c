@@ -48,9 +48,9 @@ int main() {
         }
 
         gpio_put(PICO_DEFAULT_LED_PIN, led_on);
-        gpio_put(22, led_on);
+        // gpio_put(22, led_on);
         led_on = !led_on;
-        // sleep_ms(500);
+        sleep_ms(500);
 
 #ifdef SIMULATION
         LCDSim_Redraw();
