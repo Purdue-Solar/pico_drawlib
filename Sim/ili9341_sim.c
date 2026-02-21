@@ -80,7 +80,7 @@ void LCD_WritePixel(int x, int y, uint16_t col) {
 
 void LCD_WriteBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap) {
     for (uint16_t myy = y; myy < (y + h); myy++) {
-        memcpy(&buffer[myy * _width + x], &bitmap[(myy - y) * w], sizeof(uint16_t) * 2);
+        memcpy(&buffer[myy * _width + x], &bitmap[(myy - y) * w], sizeof(uint16_t) * w);
     }
     // LCDSim_Redraw();
 }

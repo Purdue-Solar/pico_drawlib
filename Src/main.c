@@ -1,4 +1,11 @@
 #include "ili9341.h"
+#include "gfx.h"
+
+#include "fonts.h"
+#include "mcufont.h"
+#include "icons.h"
+
+// #include "psrcar.h"
 
 #ifdef SIMULATION
 #include "picosdk_sim.h"
@@ -10,6 +17,14 @@
 
 #include <stdio.h>
 // #include <sys/stdio.h>
+
+static void pixel_cb(int16_t x, int16_t y, uint8_t count, uint8_t alpha, void* state) {
+    GFX_drawFastHLine(x, y, count, GFX_RGB565(alpha, alpha, alpha));
+}
+
+static uint8_t char_cb(int16_t x0, int16_t y0, mf_char character, void* state) {
+    return mf_render_character(&mf_bwfont_Roboto_Regular20bw.font, x0, y0, character, pixel_cb, state);
+}
 
 int main() {
     stdio_init_all();
@@ -29,6 +44,8 @@ int main() {
     LCD_initDisplay();
     LCD_setRotation(1);
 
+    GFX_createFramebuf();
+
 #ifdef SIMULATION
     LCDSim_InitWindow();
 
@@ -37,28 +54,28 @@ int main() {
     while (true)
 #endif
     {
-        printf("EEEEE\n");
+        GFX_setClearColor(ILI9341_CASET);
+        GFX_clearScreen();
 
-        int q = 0;
-        for (int y = 0; y < 200; y++) {
-            for (int x = 0; x < 200; x++) {
-                LCD_WritePixel(x, y, ILI9341_GREEN);
-                printf("%d\n", q++);
-            }
-        }
+        GFX_setCursor(0, 0);
+        GFX_setTextColor(ILI9341_GREEN);
+        GFX_setTextBack(ILI9341_GREEN);
+        GFX_printf("I am the built-in font from the ILI9341 Library!");
 
-        gpio_put(PICO_DEFAULT_LED_PIN, led_on);
-        gpio_put(22, led_on);
-        led_on = !led_on;
-        // sleep_ms(500);
+        mf_render_aligned(&mf_bwfont_Roboto_Regular20bw.font, GFX_getWidth() / 2, GFX_getHeight() / 2, MF_ALIGN_CENTER, "I am MCUFont.", 0, char_cb, NULL);
 
+        GFX_setTextColor(ILI9341_WHITE);
+        GFX_DrawIcon(warning_icon, 0, 100, 40, 40);
+
+        GFX_Update();
 #ifdef SIMULATION
         LCDSim_Redraw();
 #endif
     }
 
+    GFX_destroyFramebuf();
+
 #ifdef SIMULATION
     LCDSim_CloseWindow();
 #endif
-
 }
