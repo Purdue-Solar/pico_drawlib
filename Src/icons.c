@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include "gfx.h"
 
-const int warning_icon_width  = 40;
-const int warning_icon_height = 40;
+const int warning_icon_width  = 32;
+const int warning_icon_height = 32;
 
 uint8_t warning_icon[] = {
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,

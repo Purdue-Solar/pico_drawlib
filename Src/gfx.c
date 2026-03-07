@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 #ifdef SIMULATION
 #include "picosdk_sim.h"
@@ -57,7 +58,11 @@ void GFX_DrawIcon(uint8_t* icon, uint x, uint y, uint width, uint height)
 {
     for (uint myy = 0; myy < height; myy++) {
         for (uint myx = 0; myx < width; myx++) {
-			if (icon[myy * width + myx]) {
+
+			// GFX_drawPixel(myx + x, myy + y, 0xF000);
+
+			int idx = myy * width + myx;
+			if (icon[idx] > 0) {
 				GFX_drawPixel(myx + x, myy + y, 0xFFFF);
 			}
 		}

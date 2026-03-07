@@ -65,7 +65,7 @@ int main() {
         mf_render_aligned(&mf_bwfont_Roboto_Regular20bw.font, GFX_getWidth() / 2, GFX_getHeight() / 2, MF_ALIGN_CENTER, "I am MCUFont.", 0, char_cb, NULL);
 
         GFX_setTextColor(ILI9341_WHITE);
-        GFX_DrawIcon(warning_icon, 0, 100, 40, 40);
+        GFX_DrawIcon(warning_icon, 0, 100, warning_icon_width, warning_icon_height);
 
         GFX_Update();
 #ifdef SIMULATION
