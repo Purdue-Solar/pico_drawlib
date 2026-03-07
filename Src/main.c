@@ -70,6 +70,18 @@ int main() {
         // GFX_printf("I am the built-in font from the ILI9341 Library!");
 
         // mf_render_aligned(&mf_bwfont_Roboto_Regular20bw.font, GFX_getWidth() / 2, GFX_getHeight() / 2, MF_ALIGN_RIGHT, "I am MCUFont.", 0, char_cb, NULL);
+        // int q = 0;
+        // for (int y = 0; y < 200; y++) {
+        //     for (int x = 0; x < 200; x++) {
+        //         LCD_WritePixel(x, y, ILI9341_GREEN);
+        //         printf("%d\n", q++);
+        //     }
+        // }
+
+        // gpio_put(PICO_DEFAULT_LED_PIN, led_on);
+        // gpio_put(22, led_on);
+        // led_on = !led_on;
+        // sleep_ms(500);
 
         // GFX_setTextColor(ILI9341_WHITE);
         // GFX_DrawIcon(warning_icon, 0, 100, warning_icon_width, warning_icon_height, 0xFFFF);
