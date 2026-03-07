@@ -4,6 +4,7 @@
 #include "fonts.h"
 #include "mcufont.h"
 #include "icons.h"
+#include "pdl.h"
 
 // #include "psrcar.h"
 
@@ -46,6 +47,12 @@ int main() {
 
     GFX_createFramebuf();
 
+    PDLInfo info = {
+        .motor_velocity = 50,
+        .motor_current = 700,
+        .main_over_voltage = 1,
+    };
+
 #ifdef SIMULATION
     LCDSim_InitWindow();
 
@@ -54,18 +61,20 @@ int main() {
     while (true)
 #endif
     {
-        GFX_setClearColor(ILI9341_CASET);
-        GFX_clearScreen();
+        // GFX_setClearColor(ILI9341_BLACK);
+        // GFX_clearScreen();
 
-        GFX_setCursor(0, 0);
-        GFX_setTextColor(ILI9341_GREEN);
-        GFX_setTextBack(ILI9341_GREEN);
-        GFX_printf("I am the built-in font from the ILI9341 Library!");
+        // GFX_setCursor(0, 0);
+        // GFX_setTextColor(ILI9341_GREEN);
+        // GFX_setTextBack(ILI9341_GREEN);
+        // GFX_printf("I am the built-in font from the ILI9341 Library!");
 
-        mf_render_aligned(&mf_bwfont_Roboto_Regular20bw.font, GFX_getWidth() / 2, GFX_getHeight() / 2, MF_ALIGN_CENTER, "I am MCUFont.", 0, char_cb, NULL);
+        // mf_render_aligned(&mf_bwfont_Roboto_Regular20bw.font, GFX_getWidth() / 2, GFX_getHeight() / 2, MF_ALIGN_RIGHT, "I am MCUFont.", 0, char_cb, NULL);
 
-        GFX_setTextColor(ILI9341_WHITE);
-        GFX_DrawIcon(warning_icon, 0, 100, warning_icon_width, warning_icon_height);
+        // GFX_setTextColor(ILI9341_WHITE);
+        // GFX_DrawIcon(warning_icon, 0, 100, warning_icon_width, warning_icon_height, 0xFFFF);
+
+        pdl_draw(&info);
 
         GFX_Update();
 #ifdef SIMULATION
