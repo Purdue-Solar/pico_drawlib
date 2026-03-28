@@ -1,4 +1,6 @@
 # WARNING: THIS MAKEFILE IS MEANT FOR SIMULATION ONLY!!!
+# The simulation's main file is Sim/main.c.
+# The real program's main file is Src/main.cpp.
 
 CC = clang
 LIBS = raylib
@@ -6,6 +8,7 @@ CFLAGS = -DSIMULATION -IInc -ISim -ISrc/mcufont_decoder $(shell pkg-config --cfl
 LFLAGS = $(shell pkg-config --libs $(LIBS))
 
 SRCS = $(wildcard Sim/*.c) $(wildcard Src/*.c) $(wildcard Src/mcufont_decoder/*.c)
+
 OBJS = $(patsubst %.c,simbuild/%.o,$(SRCS))
 EXE = pico_drawlib
 

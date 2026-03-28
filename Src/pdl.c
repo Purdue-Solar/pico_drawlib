@@ -44,7 +44,7 @@ const char* pdl_get_warning_message(const PDLInfo* info) {
     if (info->aux_current_warning) {
         return "Aux battery current warning";
     }
-    if (info->main_over_current_error) {
+    if (info->main_over_current) {
         return "Main battery overcurrent";
     }
     if (info->aux_over_current) {
@@ -109,6 +109,41 @@ void pdl_draw_text(int16_t x0, int16_t y0, enum mf_align_t align, FontSize size,
     mf_render_aligned(state.font, x0, y0, align, text, 0, char_cb, &state);
 }
 
+// align is either left or right
+// if align is left,  then things are drawn to the RIGHT of (x, y)
+// if align is right, then things are drawn to the LEFT  of (x, y)
+// I know this is confusing, but this is EXACTLY how MCUFont does it.
+// I'm sorry.
+// (also I know we're using an MCUFont enum here, but I don't want to declare a new enum)
+static void pdl_draw_stat(const char* name, bool value, int16_t x, int16_t y, enum mf_align_t align) {
+    // `value`'s square's width and height
+    const int valw = 15;
+    const int valh = 30;
+    // width between value square and text
+    const int textpad = 5;
+    const uint16_t truecolor  = ILI9341_GREEN;
+    const uint16_t falsecolor = ILI9341_RED;
+
+    int valx = (align == MF_ALIGN_LEFT) ? x : x - valw;
+    GFX_fillRect(valx, y, valw, valh, value ? truecolor : falsecolor);
+    
+    int textx = (align == MF_ALIGN_LEFT) ? x + valw + textpad : x - valw - textpad;
+    pdl_draw_text(textx, y, align, FNTSMALL, WHITE, name);
+}
+
+static void pdl_draw_battery_stats(
+    enum mf_align_t align, int16_t x, int16_t y,
+    bool overvoltage, bool undervoltage, bool overcurrent, bool current_warning
+) {
+    // "false" in pdl_draw_state means "BAD", so we NOT the booleans.
+    pdl_draw_stat("OV", !overvoltage,     x, y, align);
+    y += 40;
+    pdl_draw_stat("UV", !undervoltage,    x, y, align);
+    y += 40;
+    pdl_draw_stat("OC", !overcurrent,     x, y, align);
+    y += 40;
+    pdl_draw_stat("CW", !current_warning, x, y, align);
+}
 
 void pdl_draw(const PDLInfo* info) {
     GFX_setClearColor(bgcolor);
@@ -125,6 +160,17 @@ void pdl_draw(const PDLInfo* info) {
     pdl_draw_text(PDL_WIDTH / 2, 30,  MF_ALIGN_CENTER, FNTSMALL, WHITE, "mph");
     pdl_draw_text(PDL_WIDTH / 2, 50,  MF_ALIGN_CENTER, FNTBIG,   WHITE, num_to_str(info->motor_current));
     pdl_draw_text(PDL_WIDTH / 2, 90,  MF_ALIGN_CENTER, FNTSMALL, WHITE, "Amps");
+
+    pdl_draw_battery_stats(
+        MF_ALIGN_LEFT, 10, 30,
+        info->main_over_voltage, info->main_under_voltage,
+        info->main_over_current, info->main_current_warning
+    );
+    pdl_draw_battery_stats(
+        MF_ALIGN_RIGHT, PDL_WIDTH - 10, 30,
+        info->aux_over_voltage, info->aux_under_voltage,
+        info->aux_over_current, info->aux_current_warning
+    );
 
     const char* warning = pdl_get_warning_message(info);
     if (warning != NULL) {
