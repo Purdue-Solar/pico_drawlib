@@ -77,7 +77,7 @@ int main()
                 info.main_valid = data[0] & 0b00000001;
                 info.aux_valid = data[0] & 0b00000010;
                 info.main_current_warning = data[0] & 0b00010000;
-                info.main_over_current_error = data[0] & 0b00100000;
+                info.main_over_current = data[0] & 0b00100000;
                 info.main_under_voltage = data[0] & 0b01000000;
                 info.main_over_voltage = data[0] & 0b10000000;
 
