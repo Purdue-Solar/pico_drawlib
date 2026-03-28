@@ -33,7 +33,11 @@
 
 typedef struct PDLInfo
 {
+    // ASSUMPTION: It is in celsius
     uint8_t battery_temperature;
+
+    // SOC = state of charge (battery percentage?)
+    // ASSUMPTION: Range = 0 - 100
     uint8_t battery_soc;
 
     uint32_t motor_current;
@@ -46,7 +50,7 @@ typedef struct PDLInfo
 
     bool main_over_voltage;
     bool main_under_voltage;
-    bool main_over_current_error;
+    bool main_over_current;
     bool main_current_warning;
     // uint8_t aux_condition; // 4 bits
     bool main_valid; // DC valid

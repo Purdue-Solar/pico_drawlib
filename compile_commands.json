@@ -1,0 +1,306 @@
+[
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Sim/ili9341_sim.o",
+   "-c",
+   "Sim/ili9341_sim.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Sim/ili9341_sim.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Sim/main.o",
+   "-c",
+   "Sim/main.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Sim/main.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Sim/picosdk_sim.o",
+   "-c",
+   "Sim/picosdk_sim.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Sim/picosdk_sim.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/gfx.o",
+   "-c",
+   "Src/gfx.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/gfx.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/icons.o",
+   "-c",
+   "Src/icons.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/icons.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/ili9341.o",
+   "-c",
+   "Src/ili9341.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/ili9341.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/pdl.o",
+   "-c",
+   "Src/pdl.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/pdl.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/Roboto-Regular20.o",
+   "-c",
+   "Src/Roboto-Regular20.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/Roboto-Regular20.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/Roboto-Regular20bw.o",
+   "-c",
+   "Src/Roboto-Regular20bw.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/Roboto-Regular20bw.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/Roboto-Regular40.o",
+   "-c",
+   "Src/Roboto-Regular40.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/Roboto-Regular40.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/Roboto-Regular40bw.o",
+   "-c",
+   "Src/Roboto-Regular40bw.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/Roboto-Regular40bw.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_bwfont.o",
+   "-c",
+   "Src/mcufont_decoder/mf_bwfont.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_bwfont.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_encoding.o",
+   "-c",
+   "Src/mcufont_decoder/mf_encoding.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_encoding.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_font.o",
+   "-c",
+   "Src/mcufont_decoder/mf_font.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_font.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_justify.o",
+   "-c",
+   "Src/mcufont_decoder/mf_justify.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_justify.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_kerning.o",
+   "-c",
+   "Src/mcufont_decoder/mf_kerning.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_kerning.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_rlefont.o",
+   "-c",
+   "Src/mcufont_decoder/mf_rlefont.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_rlefont.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_scaledfont.o",
+   "-c",
+   "Src/mcufont_decoder/mf_scaledfont.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_scaledfont.c"
+ },
+ {
+  "directory": "/Users/newuser/pico_drawlib",
+  "arguments": [
+   "clang",
+   "-o",
+   "simbuild/Src/mcufont_decoder/mf_wordwrap.o",
+   "-c",
+   "Src/mcufont_decoder/mf_wordwrap.c",
+   "-DSIMULATION",
+   "-IInc",
+   "-ISim",
+   "-ISrc/mcufont_decoder",
+   "-I/opt/homebrew/Cellar/raylib/5.5/include"
+  ],
+  "file": "Src/mcufont_decoder/mf_wordwrap.c"
+ }
+]
