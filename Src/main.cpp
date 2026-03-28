@@ -20,7 +20,7 @@
 
 int main()
 {
-    Info info;
+    PDLInfo info;
     uint8_t buffer[13];
     uint32_t id;
     uint8_t data[8];
