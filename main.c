@@ -89,7 +89,7 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
     if (cruise_up_pressed)
         bits |= (1u << BIT_CRUISE_UP);
     if (cruise_down_pressed)
-        bits |= (1u << BIT_CRUISE_DOWN);
+        bits |= (1u <<  BIT_CRUISE_DOWN);
     if (horn_pressed)
         bits |= (1u << BIT_HORN);
     if (g_brights_on)
@@ -101,7 +101,7 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
 
     uint8_t data[2] = { (uint8_t)(bits & 0xFFu), (uint8_t)(bits >> 8) };
     xl2515_send(STEERING_WHEEL_TO_POWER_DISTRO_ID, data, 2);
-}
+}   
 
 // Parse Power Distro → Steering Wheel (0x801) and update status flags
 static void process_power_distro_status(uint8_t *data, uint8_t len)
