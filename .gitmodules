@@ -1,0 +1,3 @@
+[submodule "Src/pico_canlib"]
+	path = Src/pico_canlib
+	url = https://github.com/Purdue-Solar/pico_canlib.git

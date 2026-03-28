@@ -10,6 +10,8 @@
 
 #ifdef SIMULATION
 #include "picosdk_sim.h"
+#include "raylib.h"
+#include "math.h"
 #else
 #include "pico/stdio.h"
 #include "pico/time.h"
@@ -18,6 +20,29 @@
 
 #include <stdio.h>
 // #include <sys/stdio.h>
+
+bool periodic(double offset, double frequency) {
+    double time = GetTime() + offset;
+    return fmod(time * frequency, 1.0) < 0.5;
+}
+
+PDLInfo get_info() {
+    PDLInfo info = {
+        .motor_velocity = 50,
+        .motor_current = 700,
+
+        .main_over_voltage = periodic(0.0, 1.0),
+        .main_under_voltage = 0,
+        .main_over_current = 0,
+        .main_current_warning = 1,
+
+        .aux_over_voltage = !periodic(4.926, 0.3958),
+        .aux_under_voltage = 1,
+        .aux_over_current = periodic(0.5, 3.14159),
+        .aux_current_warning = 1,
+    };
+    return info;
+}
 
 static void pixel_cb(int16_t x, int16_t y, uint8_t count, uint8_t alpha, void* state) {
     GFX_drawFastHLine(x, y, count, GFX_RGB565(alpha, alpha, alpha));
@@ -47,11 +72,6 @@ int main() {
 
     GFX_createFramebuf();
 
-    PDLInfo info = {
-        .motor_velocity = 50,
-        .motor_current = 700,
-        .main_over_voltage = 1,
-    };
 
 #ifdef SIMULATION
     LCDSim_InitWindow();
@@ -86,6 +106,7 @@ int main() {
         // GFX_setTextColor(ILI9341_WHITE);
         // GFX_DrawIcon(warning_icon, 0, 100, warning_icon_width, warning_icon_height, 0xFFFF);
 
+        PDLInfo info = get_info();
         pdl_draw(&info);
 
         GFX_Update();

@@ -91,6 +91,10 @@
 #define ILI9341_YELLOW 0xFFE0
 #define ILI9341_ORANGE 0xFC00
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void LCD_setPins(uint16_t dc, uint16_t cs, int16_t rst, uint16_t sck, uint16_t tx);
 void LCD_setSPIperiph(spi_inst_t *s);
 void LCD_initDisplay();
@@ -99,6 +103,10 @@ void LCD_setRotation(uint8_t m);
 
 void LCD_WritePixel(int x, int y, uint16_t col);
 void LCD_WriteBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);
+
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef SIMULATION
 void LCDSim_InitWindow(void);
