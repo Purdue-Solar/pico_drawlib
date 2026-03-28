@@ -43,6 +43,7 @@ file(GLOB_RECURSE SRC_FILES
     "${CMAKE_SOURCE_DIR}/Src/*.cpp"
     "${CMAKE_SOURCE_DIR}/Src/*.c"
     "${CMAKE_SOURCE_DIR}/Src/pico_canlib/Src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/Src/mcufont_decoder/*.c"
 )
 add_executable(pico_canlib ${SRC_FILES})
 
@@ -61,6 +62,7 @@ target_link_libraries(pico_canlib
 target_include_directories(pico_canlib PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/Inc
         ${CMAKE_CURRENT_LIST_DIR}/Src/pico_canlib/Inc
+        ${CMAKE_CURRENT_LIST_DIR}/Src/mcufont_decoder
 )
 
 # get_target_property(PICO_INCLUDES pico_stdio_headers INTERFACE_INCLUDE_DIRECTORIES)
