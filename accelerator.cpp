@@ -1,11 +1,12 @@
-#include "accelerator.h"
+#include "accelerator.hpp"
+#include "pico_canlib.hpp"
 #include <stdlib.h>
 #include <string.h>
 
 static float g_pedal_value = 0.0f; // 0.0 to 1.0
 static uint8_t g_drive_state = DRIVE_NEUTRAL;
 
-// read FNR switch and update drive state (g_drive_state)
+// read FNR pins and update drive state (g_drive_state)
 static void update_drive_state(void)
 {
     bool forward = gpio_get(FNR_FORWARD_PIN);
@@ -27,7 +28,7 @@ static void update_pedal_value(void)
 {
     uint16_t raw_pedal = adc_read();
 
-    // convert to 0.0 - 1.0 to send to motor(can change if necessary)
+    // convert to 0.0 - 1.0 to send to motor (can change if necessary)
     float converted_pedal = raw_pedal / 4095.0f;
 
     if (converted_pedal < PEDAL_DEADZONE){
@@ -53,8 +54,8 @@ void accelerator_init(void)
     adc_select_input(0); // uses ADC0 channel 0 (GPIO26)
 }
 
-//send CAN message to motor 
-void send_motor_command()
+//sending CAN message to motor (FEEL FREEE TO CHANGE IM NOT SURE IF THIS IS HOW TO SEND CURRENT AND VELOCITY INFO THRU CAN PROPERLY)
+void send_motor_command(pico_canlib& can)
 {
     float current = 0.0f;
     float max_velocity = 0.0f;
@@ -74,17 +75,17 @@ void send_motor_command()
 
     uint8_t current_data[4];
     memcpy(current_data, &current, 4);
-    xl2515_send(MOTOR_CURRENT_CAN_ID, current_data, 4);
-  
+    can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, MOTOR_CURRENT_CAN_ID, false, current_data, 4, XL2515::PRIORITY::Highest);
+
     uint8_t velocity_data[4];
     memcpy(velocity_data, &max_velocity, 4);
-    xl2515_send(MOTOR_VELOCITY_CAN_ID, velocity_data, 4);
+    can.transmitCAN(XL2515::TX_BUFFER_SEL::TX1, MOTOR_VELOCITY_CAN_ID, false, velocity_data, 4, XL2515::PRIORITY::Highest);
 }
 
-//call in main to get inputs and update accelerator
-void accelerator_update(void)
+//call in main to get pin inputs and update accelerator
+void accelerator_update(pico_canlib& can)
 {
     update_drive_state();
     update_pedal_value();
-    send_motor_command();
+    send_motor_command(can);
 }
