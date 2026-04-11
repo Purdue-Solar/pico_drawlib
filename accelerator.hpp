@@ -2,7 +2,6 @@
 #include <stdbool.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
-#include "xl2515.h"
 
 // Input pins
 #define FNR_FORWARD_PIN 6

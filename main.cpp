@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include "pico/stdlib.h"
-#include "xl2515.h"
 #include "pico_canlib.hpp"
 #include "accelerator.hpp"
 
@@ -258,12 +257,12 @@ int main()
             uint32_t id;
             uint8_t rx_data[8];
             uint8_t rx_len = 0;
-            if (!g_can.receiveCAN(&id, &rx_data) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
+            if (!(int)g_can.receiveCAN(&id, rx_data, 4, 8) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
                 process_power_distro_status(rx_data, rx_len);
             }
-            if (xl2515_recv(&id, rx_data, &rx_len) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
-                process_power_distro_status(rx_data, rx_len);
-            }
+            //if (xl2515_recv(&id, rx_data, &rx_len) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
+                //process_power_distro_status(rx_data, rx_len);
+            //}
         }
 
         // LED: heartbeat when idle; blink when cruise on; fast blink when main fault
