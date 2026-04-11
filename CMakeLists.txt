@@ -26,7 +26,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(artemis26-steering-wheel "main.c" "xl2515.c" )
+add_executable(artemis26-steering-wheel "main.cpp" "pico_canlib.cpp")
 
 pico_set_program_name(artemis26-steering-wheel "artemis26-steering-wheel")
 pico_set_program_version(artemis26-steering-wheel "0.1")
@@ -38,7 +38,8 @@ pico_enable_stdio_usb(artemis26-steering-wheel 1)
 # Add the standard library to the build
 target_link_libraries(artemis26-steering-wheel
         pico_stdlib
-        hardware_spi)
+        hardware_spi
+        hardware_adc)
 
 # Add the standard include files to the build
 target_include_directories(artemis26-steering-wheel PRIVATE

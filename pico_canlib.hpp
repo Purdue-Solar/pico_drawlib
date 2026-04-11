@@ -187,7 +187,7 @@ public:
     /// @param idSize Length in bytes of id
     /// @param bufferSize Length in bytes of payload
     /// @return True if SPI request was successful sent
-    status receiveCAN(uint8_t *id, uint8_t *buffer, uint8_t idSize, uint8_t bufferSize);
+    status receiveCAN(uint32_t *id, uint8_t *buffer, uint8_t idSize, uint8_t bufferSize);
 
     /// @brief Check can status register (Tell setting of the tranciever)
     /// @param status Return status byte (XL2515 Specifics. Check datasheet)

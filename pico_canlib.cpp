@@ -258,7 +258,7 @@ pico_canlib::status pico_canlib::transmitCAN(XL2515::TX_BUFFER_SEL TX_SEL, uint3
 // 2. check if bit 0 and 1 of received byte
 // 3. if bit is high, send READ RX BUFFER command
 // 4. clear CANINTF via bitmodify
-pico_canlib::status pico_canlib::receiveCAN(/*uint8_t rxstat, uint8_t RX_ID,*/ uint32_t *id, uint8_t *buffer, uint32_t idSize = 4, uint8_t bufferSize = 8)
+pico_canlib::status pico_canlib::receiveCAN(/*uint8_t rxstat, uint8_t RX_ID,*/ uint32_t *can_id, uint8_t *buffer, uint8_t idSize = 4, uint8_t bufferSize = 8)
 {
     uint8_t st;
     uint8_t RX_ID;
@@ -304,6 +304,7 @@ pico_canlib::status pico_canlib::receiveCAN(/*uint8_t rxstat, uint8_t RX_ID,*/ u
 
     // converts buffer id
     uint32_t id = (buffer[0] << 3) | (buffer[1] >> 5);
+    *can_id = id;
     buffer[0] = (id >> 24) & 0xff;
     buffer[1] = (id >> 16) & 0xff;
     buffer[2] = (id >> 8) & 0xff;
