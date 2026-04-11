@@ -4,6 +4,8 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "xl2515.h"
+#include "pico_canlib.hpp"
+#include "accelerator.hpp"
 
 // Matrix configuration
 #define NUM_ROWS    3
@@ -16,7 +18,7 @@
 #define BRAKE_INPUT_PIN BRAKE_PIN_DISABLED
 
 // Power Distro → Steering Wheel
-#define POWER_DISTRO_TO_STEERING_WHEEL_ID 0x801u
+#define POWER_DISTRO_TO_STEERING_WHEEL_ID 0x301u
 
 // Row pins (inputs)
 static const uint row_pins[NUM_ROWS] = { 16, 17, 13 };
@@ -26,6 +28,8 @@ static const uint col_pins[NUM_COLUMNS] = { 15, 14, 18, 19 };
 
 // Function called when a button is pressed. NULL = no button
 typedef void (*button_handler_t)(void);
+
+
 
 // Steering Wheel → Power Distro
 #define STEERING_WHEEL_TO_POWER_DISTRO_ID  0x701u
@@ -72,6 +76,9 @@ static bool g_status_cruise_ok      = false;
 static bool g_status_aux_ok         = false;
 static bool g_status_main_fault      = false;
 
+pico_canlib g_can;
+
+
 // Steering Wheel → Power Distro: 0x701 
 static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_down_pressed,
                                           bool horn_pressed, bool regen_pressed, bool brake_pressed)
@@ -100,7 +107,8 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
         bits |= (1u << BIT_BRAKE_LIGHTS);
 
     uint8_t data[2] = { (uint8_t)(bits & 0xFFu), (uint8_t)(bits >> 8) };
-    xl2515_send(STEERING_WHEEL_TO_POWER_DISTRO_ID, data, 2);
+    g_can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, MOTOR_CURRENT_CAN_ID, false, data, 2, XL2515::PRIORITY::Highest);
+    //xl2515_send(STEERING_WHEEL_TO_POWER_DISTRO_ID, data, 2);
 }   
 
 // Parse Power Distro → Steering Wheel (0x801) and update status flags
@@ -180,10 +188,15 @@ static const button_handler_t button_handlers[NUM_ROWS][NUM_COLUMNS] = {
 
 int main()
 {
-    stdio_init_all();
+    pico_canlib g_can = pico_canlib();
+    pico_canlib::status errorCode;
+    errorCode = g_can.init();
+    fprintf(stdout, "Init Code %d\n", errorCode);
 
-    // Initialise CAN controller for 500 kbps
-    xl2515_init(KBPS500);
+    if (errorCode != pico_canlib::status::SUCCESS)
+    {
+        fprintf(stdout, "Failed Startup\n");
+    }
 
     for (int r = 0; r < NUM_ROWS; r++) {
         gpio_init(row_pins[r]);
@@ -245,6 +258,9 @@ int main()
             uint32_t id;
             uint8_t rx_data[8];
             uint8_t rx_len = 0;
+            if (!g_can.receiveCAN(&id, &rx_data) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
+                process_power_distro_status(rx_data, rx_len);
+            }
             if (xl2515_recv(&id, rx_data, &rx_len) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
                 process_power_distro_status(rx_data, rx_len);
             }

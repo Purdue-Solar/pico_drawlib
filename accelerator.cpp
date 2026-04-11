@@ -65,7 +65,7 @@ void send_motor_command(pico_canlib& can)
         max_velocity = MOTOR_POSITIVE_RPM;
     }
     else if (g_drive_state == DRIVE_REVERSE) {
-        current  = g_pedal_value;
+        current  = g_pedal_value * 0.5f; //limit reverse to 50% power for safety
         max_velocity = MOTOR_NEGATIVE_RPM;
     }
     else {
