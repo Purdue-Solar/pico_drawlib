@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
+#include "pico_canlib.hpp"
+
 
 // Input pins
 #define FNR_FORWARD_PIN 6
@@ -25,7 +27,7 @@
 
 //intiializing pins and updating acceklerator
 void accelerator_init(void);
-void accelerator_update(void);
+void accelerator_update(pico_canlib &can);
 
 
 

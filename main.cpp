@@ -75,7 +75,7 @@ static bool g_status_cruise_ok      = false;
 static bool g_status_aux_ok         = false;
 static bool g_status_main_fault      = false;
 
-pico_canlib g_can;
+pico_canlib g_can = pico_canlib();
 
 
 // Steering Wheel → Power Distro: 0x701 
@@ -106,8 +106,8 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
         bits |= (1u << BIT_BRAKE_LIGHTS);
 
     uint8_t data[2] = { (uint8_t)(bits & 0xFFu), (uint8_t)(bits >> 8) };
-    g_can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, MOTOR_CURRENT_CAN_ID, false, data, 2, XL2515::PRIORITY::Highest);
-    //xl2515_send(STEERING_WHEEL_TO_POWER_DISTRO_ID, data, 2);
+    g_can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, STEERING_WHEEL_TO_POWER_DISTRO_ID, false, data, 2, XL2515::PRIORITY::Highest);
+    //xl2515_send(STEERING_WHEEL_TO_POWER_DISTRO_ID, data, 2); OLD ONE
 }   
 
 // Parse Power Distro → Steering Wheel (0x801) and update status flags
@@ -187,7 +187,7 @@ static const button_handler_t button_handlers[NUM_ROWS][NUM_COLUMNS] = {
 
 int main()
 {
-    pico_canlib g_can = pico_canlib();
+    //initializing CAN 
     pico_canlib::status errorCode;
     errorCode = g_can.init();
     fprintf(stdout, "Init Code %d\n", errorCode);
@@ -197,6 +197,7 @@ int main()
         fprintf(stdout, "Failed Startup\n");
     }
 
+    //initializing button matrix pins
     for (int r = 0; r < NUM_ROWS; r++) {
         gpio_init(row_pins[r]);
         gpio_set_dir(row_pins[r], GPIO_IN);
@@ -209,6 +210,7 @@ int main()
     }
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
+    accelerator_init(); //initializing accelerator pins
 
 #if (BRAKE_INPUT_PIN != BRAKE_PIN_DISABLED)
     gpio_init(BRAKE_INPUT_PIN);
@@ -259,10 +261,10 @@ int main()
             uint8_t rx_len = 0;
             if (!(int)g_can.receiveCAN(&id, rx_data, 4, 8) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
                 process_power_distro_status(rx_data, rx_len);
-            }
+            } //! since recieveCAN returns 0 on success
             //if (xl2515_recv(&id, rx_data, &rx_len) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
-                //process_power_distro_status(rx_data, rx_len);
-            //}
+                //process_power_distro_status(rx_data, rx_len); // OLD ONE
+            
         }
 
         // LED: heartbeat when idle; blink when cruise on; fast blink when main fault
@@ -276,5 +278,7 @@ int main()
         else
             led_on = (led_tick % 50 < 45);
         gpio_put(LED_PIN, led_on ? 1 : 0);
+
+        accelerator_update(g_can);
     }
 }
