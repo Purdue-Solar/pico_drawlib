@@ -26,7 +26,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(artemis26-steering-wheel "main.cpp" "pico_canlib.cpp")
+add_executable(artemis26-steering-wheel "main.cpp" "pico_canlib.cpp" "accelerator.cpp")
 
 pico_set_program_name(artemis26-steering-wheel "artemis26-steering-wheel")
 pico_set_program_version(artemis26-steering-wheel "0.1")

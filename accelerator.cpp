@@ -83,7 +83,7 @@ void send_motor_command(pico_canlib& can)
 }
 
 //call in main to get pin inputs and update accelerator
-void accelerator_update(pico_canlib& can)
+void accelerator_update(pico_canlib &can)
 {
     update_drive_state();
     update_pedal_value();
