@@ -1,16 +1,23 @@
 #include <stdint.h>
+#include <stdio.h>
 
 #include "ili9341.h"
 
 #ifdef SIMULATION
 #include "picosdk_sim.h"
 #else
+
+extern "C"
+{
 #include "pico/stdio.h"
 #include "pico/time.h"
 #include "hardware/gpio.h"
+#include "pdl.h"
+#include "gfx.h"
+}
+
 #include "pico_canlib.hpp"
 #include "artemis_canid.hpp"
-#include "pdl.h"
 #endif
 
 #include <stdio.h>
@@ -20,7 +27,7 @@
 
 int main()
 {
-    PDLInfo info;
+    PDLInfo info = {0};
     uint8_t buffer[13];
     uint32_t id;
     uint8_t data[8];
@@ -33,7 +40,7 @@ int main()
 
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-    gpio_put(PICO_DEFAULT_LED_PIN, led_on);
+    // gpio_put(PICO_DEFAULT_LED_PIN, led_on);
 
     gpio_init(22);
     gpio_set_dir(22, GPIO_OUT);
@@ -43,6 +50,7 @@ int main()
     LCD_setSPIperiph(spi0);
     LCD_initDisplay();
     LCD_setRotation(1);
+    GFX_createFramebuf();
 
 #ifdef SIMULATION
     LCDSim_InitWindow();
@@ -55,6 +63,11 @@ int main()
         if (can.receiveCAN(buffer, 4, 8) == pico_canlib::status::SUCCESS)
         {
             id = buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3];
+
+            if (id == artemis_canid::tempAndSOC)
+            {
+                gpio_put(PICO_DEFAULT_LED_PIN, true);
+            }
 
             for (int i = 0; i < 8; i++)
             {
@@ -89,6 +102,10 @@ int main()
                 break;
             }
         }
+
+        info.motor_velocity++;
+
+        pdl_draw(&info);
 #ifdef SIMULATION
         LCDSim_Redraw();
 #endif

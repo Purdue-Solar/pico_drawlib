@@ -9,7 +9,7 @@
 #endif
 
 // Use DMA?
-//#define USE_DMA 1
+// #define USE_DMA 1
 
 #define MADCTL_MY 0x80  ///< Bottom to top
 #define MADCTL_MX 0x40  ///< Right to left
@@ -18,7 +18,6 @@
 #define MADCTL_RGB 0x00 ///< Red-Green-Blue pixel order
 #define MADCTL_BGR 0x08 ///< Blue-Green-Red pixel order
 #define MADCTL_MH 0x04  ///< LCD refresh right to left
-
 
 #define ILI9341_TFTWIDTH 240  ///< ILI9341 max TFT width
 #define ILI9341_TFTHEIGHT 320 ///< ILI9341 max TFT height
@@ -56,11 +55,11 @@
 #define ILI9341_VSCRSADD 0x37 ///< Vertical Scrolling Start Address
 #define ILI9341_PIXFMT 0x3A   ///< COLMOD: Pixel Format Set
 
-#define ILI9341_FRMCTR1                                                        \
-  0xB1 ///< Frame Rate Control (In Normal Mode/Full Colors)
+#define ILI9341_FRMCTR1 \
+  0xB1                       ///< Frame Rate Control (In Normal Mode/Full Colors)
 #define ILI9341_FRMCTR2 0xB2 ///< Frame Rate Control (In Idle Mode/8 colors)
-#define ILI9341_FRMCTR3                                                        \
-  0xB3 ///< Frame Rate control (In Partial Mode/Full Colors)
+#define ILI9341_FRMCTR3 \
+  0xB3                       ///< Frame Rate control (In Partial Mode/Full Colors)
 #define ILI9341_INVCTR 0xB4  ///< Display Inversion Control
 #define ILI9341_DFUNCTR 0xB6 ///< Display Function Control
 
@@ -92,17 +91,18 @@
 #define ILI9341_ORANGE 0xFC00
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-void LCD_setPins(uint16_t dc, uint16_t cs, int16_t rst, uint16_t sck, uint16_t tx);
-void LCD_setSPIperiph(spi_inst_t *s);
-void LCD_initDisplay();
+  void LCD_setPins(uint16_t dc, uint16_t cs, int16_t rst, uint16_t sck, uint16_t tx);
+  void LCD_setSPIperiph(spi_inst_t *s);
+  void LCD_initDisplay();
 
-void LCD_setRotation(uint8_t m);
+  void LCD_setRotation(uint8_t m);
 
-void LCD_WritePixel(int x, int y, uint16_t col);
-void LCD_WriteBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);
+  void LCD_WritePixel(int x, int y, uint16_t col);
+  void LCD_WriteBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);
 
 #ifdef __cplusplus
 }

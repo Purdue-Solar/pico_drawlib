@@ -54,19 +54,22 @@ uint8_t wrap = 1;
 
 GFXfont *gfxFont = NULL;
 
-void GFX_DrawIcon(uint8_t* icon, uint x, uint y, uint width, uint height, uint16_t color)
+void GFX_DrawIcon(uint8_t *icon, uint x, uint y, uint width, uint height, uint16_t color)
 {
-    for (uint myy = 0; myy < height; myy++) {
-        for (uint myx = 0; myx < width; myx++) {
+	for (uint myy = 0; myy < height; myy++)
+	{
+		for (uint myx = 0; myx < width; myx++)
+		{
 
 			// GFX_drawPixel(myx + x, myy + y, 0xF000);
 
 			int idx = myy * width + myx;
-			if (icon[idx] > 0) {
+			if (icon[idx] > 0)
+			{
 				GFX_drawPixel(myx + x, myy + y, color);
 			}
 		}
-    }
+	}
 }
 
 uint GFX_getWidth()
@@ -496,7 +499,7 @@ void GFX_flush()
 
 void GFX_Update()
 {
-	if(gfxFbUpdated)
+	if (gfxFbUpdated)
 		GFX_flush();
 }
 

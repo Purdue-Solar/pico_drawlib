@@ -69,10 +69,19 @@ typedef struct PDLInfo
 #define PDL_WARNING_HEIGHT 40
 #define PDL_CENTERPANEL_WIDTH 160
 
-#define PDL_CENTERPANEL_LEFT  ((PDL_WIDTH - PDL_CENTERPANEL_WIDTH) / 2.0)
+#define PDL_CENTERPANEL_LEFT ((PDL_WIDTH - PDL_CENTERPANEL_WIDTH) / 2.0)
 #define PDL_CENTERPANEL_RIGHT (PDL_CENTERPANEL_LEFT + PDL_CENTERPANEL_WIDTH)
 #define PDL_MAIN_BOTTOM (PDL_HEIGHT - PDL_WARNING_HEIGHT)
 
-void pdl_draw(const PDLInfo* info);
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    void pdl_draw(const PDLInfo *info);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // !PDL_H
