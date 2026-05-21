@@ -1,4 +1,3 @@
-# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
 if(WIN32)
     set(USERHOME $ENV{USERPROFILE})
 else()
@@ -12,39 +11,55 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.12)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(PICO_BOARD pico2 CACHE STRING "Board type")
 
-# Pull in Raspberry Pi Pico SDK (must be before project)
+# Must come before project()
 include(pico_sdk_import.cmake)
 
 project(artemis26-steering-wheel C CXX ASM)
 
-# Initialise the Raspberry Pi Pico SDK
+# Must come after project()
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
-
-add_executable(artemis26-steering-wheel "main.cpp" "pico_canlib.cpp" "accelerator.cpp")
+# ---------------------------------------------------------------------------
+# pico_canlib — pulled in from the submodule.
+# add_subdirectory() runs lib/pico_canlib/CMakeLists.txt, which defines the
+# pico_canlib target. Because we are a parent project, the standalone guard
+# in that file skips its project()/pico_sdk_init() calls automatically.
+# ---------------------------------------------------------------------------
+add_subdirectory(lib/pico_canlib)
+# ---------------------------------------------------------------------------
+# Main executable
+# ---------------------------------------------------------------------------
+add_executable(artemis26-steering-wheel
+    main.cpp
+    src/accelerator.cpp
+    src/matrix.cpp
+)
 
 pico_set_program_name(artemis26-steering-wheel "artemis26-steering-wheel")
 pico_set_program_version(artemis26-steering-wheel "0.1")
 
-# Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(artemis26-steering-wheel 0)
 pico_enable_stdio_usb(artemis26-steering-wheel 1)
 
-# Add the standard library to the build
-target_link_libraries(artemis26-steering-wheel
-        pico_stdlib
-        hardware_spi
-        hardware_adc)
-
-# Add the standard include files to the build
+# PRIVATE: inc/ is only for this target, not propagated to anything that
+# links against it (nothing does, since this is the top-level executable).
 target_include_directories(artemis26-steering-wheel PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+    inc/
+)
+
+# Linking pico_canlib here automatically pulls in:
+#   - lib/pico_canlib/Inc/ (from pico_canlib's PUBLIC include)
+#   - pico_stdlib and hardware_spi (from pico_canlib's PUBLIC link libraries)
+target_link_libraries(artemis26-steering-wheel PRIVATE
+    pico_canlib
+    pico_stdlib
+    hardware_adc
 )
 
 pico_add_extra_outputs(artemis26-steering-wheel)
-

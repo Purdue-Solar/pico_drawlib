@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <cstring>
 #include "pico/stdlib.h"
 #include "pico_canlib.hpp"
 #include "accelerator.hpp"
@@ -104,8 +105,14 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
 }
 
 // Parse Power Distro → Steering Wheel and update status flags
-static void process_power_distro_status(uint8_t *data)
+static void process_power_distro_status(uint8_t *data, uint8_t length)
 {
+    if (length < 3)
+        g_status_main_fault = 1;
+        g_status_aux_fault = 1;
+        // Make it so that a more sophisticated error than this is returned
+    return;
+
     using MB = PowerDistroMsg::MonitorBit;
     g_status_main_fault = (data[PowerDistroMsg::BYTE_MONITOR] & mbit(MB::DcdcInvalid) & mbit(MB::MainMonitorError)) && (data[PowerDistroMsg::BYTE_MAIN] & 0x0F);
     g_status_aux_fault  = (data[PowerDistroMsg::BYTE_MONITOR] & mbit(MB::AuxInvalid)  & mbit(MB::AuxMonitorError))  && (data[PowerDistroMsg::BYTE_AUX]  & 0x0F);
@@ -198,12 +205,16 @@ int main()
         );
 
         // Process received CAN (Power Distro → Steering Wheel artemis_canid::powerDistroToSteering).
-        // Ensure xl2515 RX filter accepts artemis_canid::powerDistroToSteering
         {
-            uint32_t id;
-            uint8_t rx_data[8];
-            if (!(int)g_can.receiveCAN(&id, rx_data, 4, 8) && id == canIDHelper(artemis_canid::powerDistroToSteering)) {
-                process_power_distro_status(rx_data);
+            // Buffer layout per new receiveCAN API: [0–3] id, [4] data length, [5–12] data
+            uint8_t rx_buf[13];
+            if (!(int)g_can.receiveCAN(rx_buf, 4, 8)) {
+                uint32_t id;
+                memcpy(&id, rx_buf, 4);
+                if (id == canIDHelper(artemis_canid::powerDistroToSteering)) {
+                    // Go to rx_buf + 5 to start at data, use rx_buf[4] to pass data length
+                    process_power_distro_status(rx_buf + 5, rx_buf[4]);
+                }
             }
         }
 
