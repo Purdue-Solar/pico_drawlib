@@ -1,35 +1,34 @@
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "pico_canlib.hpp"
 
-
 // Input pins
-#define FNR_FORWARD_PIN 6
-#define FNR_REVERSE_PIN 7
-#define ACCELERATOR_PIN 26  // GPIO26_ADC0
-
-// Drive states
-#define DRIVE_NEUTRAL 0
-#define DRIVE_FORWARD 1
-#define DRIVE_REVERSE 2
-
-#define PEDAL_DEADZONE 0.05f // 5% deadzone (can change if necessary)
+static constexpr uint8_t FNRForwardPin = 6;
+static constexpr uint8_t FNRReversePin = 7;
+static constexpr uint8_t AcceleratorPin = 26;  // GPIO26_ADC0
 
 // Motor CAN IDs
-#define MOTOR_CURRENT_CAN_ID 0x501 
-#define MOTOR_VELOCITY_CAN_ID 0x502
+static constexpr uint32_t motorCurrentCanID = 0x501u;
+static constexpr uint32_t motorVelocityCanID = 0x502u;
+
+// Drive states
+enum DriveDirection : uint8_t {
+        driveNeutral = 0,
+        driveForward = 1,
+        driveReverse = 2,
+};
 
 //Motor velocity constants
-#define MOTOR_POSITIVE_RPM 20000.0f  
-#define MOTOR_NEGATIVE_RPM -20000.0f
+static constexpr int32_t motorPositiveRPM = 20000; 
+static constexpr int32_t motorNegativeRPM = -20000;
 
+static constexpr float pedalDeadzone = 0.05f; // 5% deadzone (can change if necessary)
 //intiializing pins and updating acceklerator
 void accelerator_init(void);
 void accelerator_update(pico_canlib &can);
-
-
 
 
 
