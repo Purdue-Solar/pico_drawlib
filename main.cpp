@@ -5,29 +5,9 @@
 #include "pico_canlib.hpp"
 #include "accelerator.hpp"
 #include "features.hpp"
+#include "artemis_canid.hpp"
 
-// Matrix configuration
-#define NUM_ROWS    3
-#define NUM_COLUMNS 4
-#define SCAN_DELAY_MS 5
-#define LED_PIN 25
-#define BRAKE_INPUT_PIN 255
-
-// Power Distro → Steering Wheel
-static constexpr uint32_t POWER_DISTRO_TO_STEERING_WHEEL_ID = 0x301u;
-// Steering Wheel → Power Distro
-static constexpr uint32_t STEERING_WHEEL_TO_POWER_DISTRO_ID = 0x701u;
-
-// Row pins (inputs)
-static const uint row_pins[NUM_ROWS] = { 16, 17, 13 };
-
-// Column pins (outputs)
-static const uint col_pins[NUM_COLUMNS] = { 15, 14, 18, 19 };
-
-// Function called when a button is pressed. NULL = no button
-typedef void (*button_handler_t)(void);
-
-// Bit positions for STEERING_WHEEL_TO_POWER_DISTRO_ID payload
+// Bit positions for artemis_canid::steeringToPowerDistro payload
 enum class SteeringWheelMsg : uint8_t {
     bitLeftLights = 0,
     bitRightLights = 1,
@@ -120,7 +100,7 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
     }
 
     uint8_t data[2] = { (uint8_t)(bits & 0xFFu), (uint8_t)(bits >> 8) };
-    g_can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, STEERING_WHEEL_TO_POWER_DISTRO_ID, false, data, 2, XL2515::PRIORITY::Highest);
+    g_can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, canIDHelper(artemis_canid::steeringToPowerDistro), false, data, 2, XL2515::PRIORITY::Highest);
 }
 
 // Parse Power Distro → Steering Wheel and update status flags
@@ -137,17 +117,17 @@ static void on_right_light(void) { g_right_light_on = !g_right_light_on; }  // S
 static void on_hazards(void)     { g_hazards_on     = !g_hazards_on;     }  // SW03
 static void on_brights(void) { if constexpr (FEAT_BRIGHTS) g_brights_on = !g_brights_on; } // SW04 
 static void on_cruise_en(void) { if constexpr (FEAT_CRUISE_CONTROL) g_cruise_enabled = !g_cruise_enabled; } // SW05
-static void on_cruise_up(void)   { (void)0; }  // SW06 – momentary; sent as bit on STEERING_WHEEL_TO_POWER_DISTRO_ID
-static void on_cruise_down(void) { (void)0; }  // SW07 – momentary; sent as bit on STEERING_WHEEL_TO_POWER_DISTRO_ID
-static void on_horn(void)        { (void)0; }  // SW08 – momentary; sent as bit on STEERING_WHEEL_TO_POWER_DISTRO_ID
-static void on_ptt(void)         { (void)0; }  // SW09 – push-to-talk (no STEERING_WHEEL_TO_POWER_DISTRO_ID field; reserve for radio if needed)
-static void on_regen(void)       { (void)0; }  // SW10 – momentary; sent as bit on STEERING_WHEEL_TO_POWER_DISTRO_ID
+static void on_cruise_up(void)   { (void)0; }  // SW06 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
+static void on_cruise_down(void) { (void)0; }  // SW07 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
+static void on_horn(void)        { (void)0; }  // SW08 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
+static void on_ptt(void)         { (void)0; }  // SW09 – push-to-talk (no artemis_canid::steeringToPowerDistro field; reserve for radio if needed)
+static void on_regen(void)       { (void)0; }  // SW10 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
 
 // Debounce: only trigger handlers on rising edge
-static bool prev_pressed[NUM_ROWS][NUM_COLUMNS] = {{false}};
+static bool prev_pressed[numRows][numColumns] = {{false}};
 
 // [row][col]. NULL = no button
-static const button_handler_t button_handlers[NUM_ROWS][NUM_COLUMNS] = {
+static const button_handler_t button_handlers[numRows][numColumns] = {
     { on_left_light, on_right_light, on_hazards,    on_brights    },  /* row 0 */
     { on_cruise_en,  on_cruise_up,   on_cruise_down, NULL         },  /* row 1 */
     { on_horn,       on_ptt,         on_regen,       NULL         },  /* row 2 */
@@ -162,36 +142,37 @@ int main()
     if (errorCode != pico_canlib::status::SUCCESS)
         fprintf(stdout, "Failed Startup\n");
 
-    for (int r = 0; r < NUM_ROWS; r++) {
+    for (int r = 0; r < numRows; r++) {
         gpio_init(row_pins[r]);
         gpio_set_dir(row_pins[r], GPIO_IN);
         gpio_pull_down(row_pins[r]);
     }
-    for (int c = 0; c < NUM_COLUMNS; c++) {
+    for (int c = 0; c < numColumns; c++) {
         gpio_init(col_pins[c]);
         gpio_set_dir(col_pins[c], GPIO_OUT);
         gpio_put(col_pins[c], 0);
     }
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
-    accelerator_init();
+    gpio_init(LEDPin);
+    gpio_set_dir(LEDPin, GPIO_OUT);
+    Accelerator accelerator;
+    accelerator.init();
 
     if constexpr (FEAT_BRAKE_PIN) {
-        gpio_init(BRAKE_INPUT_PIN);
-        gpio_set_dir(BRAKE_INPUT_PIN, GPIO_IN);
-        gpio_pull_down(BRAKE_INPUT_PIN);
+        gpio_init(brakeInputPin);
+        gpio_set_dir(brakeInputPin, GPIO_IN);
+        gpio_pull_down(brakeInputPin);
     }
 
     while (true) {
-        bool button_pressed[NUM_ROWS][NUM_COLUMNS] = {{false}};
+        bool button_pressed[numRows][numColumns] = {{false}};
 
-        for (int col = 0; col < NUM_COLUMNS; col++) {
-            for (int c = 0; c < NUM_COLUMNS; c++) {
+        for (int col = 0; col < numColumns; col++) {
+            for (int c = 0; c < numColumns; c++) {
                 gpio_put(col_pins[c], (c == col));
             }
-            sleep_ms(SCAN_DELAY_MS);
+            sleep_ms(scanDelayMS);
 
-            for (int row = 0; row < NUM_ROWS; row++) {
+            for (int row = 0; row < numRows; row++) {
                 bool now = gpio_get(row_pins[row]) != 0;
                 button_pressed[row][col] = now;
                 if (now && !prev_pressed[row][col]) {
@@ -205,7 +186,7 @@ int main()
 
         bool brake = false;
         if constexpr (FEAT_BRAKE_PIN) {
-            brake = gpio_get(BRAKE_INPUT_PIN) != 0;
+            brake = gpio_get(brakeInputPin) != 0;
         }
 
         send_steering_wheel_can_state(
@@ -216,12 +197,12 @@ int main()
             brake
         );
 
-        // Process received CAN (Power Distro → Steering Wheel POWER_DISTRO_TO_STEERING_WHEEL_ID).
-        // Ensure xl2515 RX filter accepts POWER_DISTRO_TO_STEERING_WHEEL_ID
+        // Process received CAN (Power Distro → Steering Wheel artemis_canid::powerDistroToSteering).
+        // Ensure xl2515 RX filter accepts artemis_canid::powerDistroToSteering
         {
             uint32_t id;
             uint8_t rx_data[8];
-            if (!(int)g_can.receiveCAN(&id, rx_data, 4, 8) && id == POWER_DISTRO_TO_STEERING_WHEEL_ID) {
+            if (!(int)g_can.receiveCAN(&id, rx_data, 4, 8) && id == canIDHelper(artemis_canid::powerDistroToSteering)) {
                 process_power_distro_status(rx_data);
             }
         }
@@ -236,8 +217,8 @@ int main()
             led_on = ((led_tick / 10) % 2 == 0);
         else
             led_on = (led_tick % 50 < 45);
-        gpio_put(LED_PIN, led_on ? 1 : 0);
+        gpio_put(LEDPin, led_on ? 1 : 0);
 
-        accelerator_update(g_can);
+        accelerator.update(g_can);
     }
 }
