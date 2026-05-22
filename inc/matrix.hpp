@@ -2,17 +2,15 @@
 #include <array>
 #include <cstdint>
 
-/*
-    static const uint row_pins[numRows] = { 16, 17, 13 };
-    // Column pins (outputs)
-    constexpr uint32_t col_pins[numColumns] = {15, 14, 18, 19};
-*/
-
 class Matrix
 {
 public:
     static constexpr uint8_t MAX_ROWS = 8;
     static constexpr uint8_t MAX_COLS = 8;
+
+    typedef void (*button_handler_t)(void);
+    // Indexed [row][col] — outer dimension is row, inner is col
+    using HandlerTable = std::array<std::array<button_handler_t, MAX_COLS>, MAX_ROWS>;
 
     Matrix(
         uint8_t driveColumnTimerNumC,
@@ -21,7 +19,9 @@ public:
         const uint8_t* rowPinsC,
         uint8_t numRowsC,
         const uint8_t* colPinsC,
-        uint8_t numColsC)
+        uint8_t numColsC,
+        const HandlerTable& handlersC = {}
+    )
         :
         driveColumnTimerNum(driveColumnTimerNumC),
         isrTimerNum(isrTimerNumC),
@@ -29,15 +29,17 @@ public:
         rowPins(rowPinsC),
         numRows(numRowsC),
         colPins(colPinsC),
-        numCols(numColsC)
+        numCols(numColsC),
+        button_handlers(handlersC)
     {
         make_colmask();
     }
 
-    // Function called when a button is pressed. NULL = no button
-    typedef void (*button_handler_t)(void);
-    std::array<std::array<bool, MAX_ROWS>, MAX_COLS> button_pressed;
-    void matrix_init (void);
+    // Indexed [row][col]
+    volatile bool button_pressed[MAX_ROWS][MAX_COLS] {};
+    HandlerTable button_handlers {};
+
+    void matrix_init(void);
     void keypad_init_timer(void);
     uint8_t keypad_read_rows();
     static void keypad_drive_column(void);

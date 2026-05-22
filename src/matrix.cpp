@@ -72,12 +72,17 @@ void Matrix::keypad_isr() {
     uint8_t rows = m->keypad_read_rows();
     for (int i = 0; i < m->numRows; i++)
     {
-        if ((rows & 1u << i) && !m->button_pressed[m->currentCol][i])
+        bool now = (rows >> i) & 1u;
+        volatile bool& state = m->button_pressed[i][m->currentCol];
+        if (now && !state)
         {
-            m->button_pressed[m->currentCol][i] = 1;
-        } else if (!(rows & 1u << i) && m->button_pressed[m->currentCol][i])
+            state = true;
+            if (m->button_handlers[i][m->currentCol])
+                m->button_handlers[i][m->currentCol]();
+        }
+        else if (!now && state)
         {
-            m->button_pressed[m->currentCol][i] = 0;
+            state = false;
         }
     }
     timer_hw->alarm[m->isrTimerNum] = timer_hw->timerawl + 25000;

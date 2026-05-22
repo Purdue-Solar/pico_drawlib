@@ -9,7 +9,10 @@
 #include "artemis_canid.hpp"
 #include "matrix.hpp"
 
-// Bit positions for artemis_canid::steeringToPowerDistro payload
+/*
+Bit positions for artemis_canid::steeringToPowerDistro payload. The CAN 
+spreadsheet is the ultimate authority on the meaning of each bit.
+*/ 
 enum class Steering_wheelMsg : uint8_t {
     bitLeftLights = 0,
     bitRightLights = 1,
@@ -23,6 +26,9 @@ enum class Steering_wheelMsg : uint8_t {
     bitBrakeLights = 9,
 };
 
+/*
+Shortcut for bitshift, accounts for fact that enumClass interprets data as class rather than actual type
+*/
 uint8_t sbit(Steering_wheelMsg b)
 {
     return 1u << static_cast<uint8_t>(b);
@@ -30,9 +36,9 @@ uint8_t sbit(Steering_wheelMsg b)
 
 // Layout of the Power Distro → Steering Wheel CAN message
 struct PowerDistroMsg {
-    static constexpr uint8_t BYTE_MONITOR = 0;
-    static constexpr uint8_t BYTE_MAIN    = 1;
-    static constexpr uint8_t BYTE_AUX     = 2;
+    static constexpr uint8_t BYTE_MONITOR = 0; // 0th byte
+    static constexpr uint8_t BYTE_MAIN    = 1; // 1st byte
+    static constexpr uint8_t BYTE_AUX     = 2; // 2nd byte
 
     // Bit positions within the monitor byte
     enum class MonitorBit : uint8_t {
@@ -61,8 +67,8 @@ uint8_t mbit(PowerDistroMsg::MonitorBit b)
 }
 
 // Last status from Power Distro
-static bool g_status_aux_fault  = false;
-static bool g_status_main_fault = false;
+static bool status_aux_fault  = false;
+static bool status_main_fault = false;
 
 struct WheelState {
     bool left_light  = false;
@@ -70,83 +76,87 @@ struct WheelState {
     bool hazards     = false;
     bool brights     = false;
     bool cruise      = false;
+    bool horn        = false;
+    bool cruise_up   = false;
+    bool cruise_down = false;
+    bool regen       = false;
+    bool brake       = false;
 };
-static WheelState g_wheel;
+static WheelState wheel;
 
-pico_canlib g_can = pico_canlib();
+pico_canlib can = pico_canlib();
 
 // Steering Wheel → Power Distro
-static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_down_pressed,
-                                          bool horn_pressed, bool regen_pressed, bool brake_pressed)
+static void send_steering_wheel_can_state(WheelState wheel)
 {
     uint16_t bits = 0;
 
-    if (g_wheel.left_light)  bits |= sbit(Steering_wheelMsg::bitLeftLights);
-    if (g_wheel.right_light) bits |= sbit(Steering_wheelMsg::bitRightLights);
-    if (g_wheel.hazards)     bits |= sbit(Steering_wheelMsg::bitHazard);
-    if (horn_pressed)     bits |= sbit(Steering_wheelMsg::bitHorn);
+    if (wheel.left_light)  bits |= sbit(Steering_wheelMsg::bitLeftLights);
+    if (wheel.right_light) bits |= sbit(Steering_wheelMsg::bitRightLights);
+    if (wheel.hazards)     bits |= sbit(Steering_wheelMsg::bitHazard);
+    if (wheel.horn)     bits |= sbit(Steering_wheelMsg::bitHorn);
 
     if constexpr (FEAT_CRUISE_CONTROL) {
-        if (g_wheel.cruise)    bits |= sbit(Steering_wheelMsg::bitCruiseEn);
-        if (cruise_up_pressed)   bits |= sbit(Steering_wheelMsg::bitCruiseUp);
-        if (cruise_down_pressed) bits |= sbit(Steering_wheelMsg::bitCruiseDown);
+        if (wheel.cruise)      bits |= sbit(Steering_wheelMsg::bitCruiseEn);
+        if (wheel.cruise_up)   bits |= sbit(Steering_wheelMsg::bitCruiseUp);
+        if (wheel.cruise_down) bits |= sbit(Steering_wheelMsg::bitCruiseDown);
     }
     if constexpr (FEAT_BRIGHTS) {
-        if (g_wheel.brights) bits |= sbit(Steering_wheelMsg::bitBright);
+        if (wheel.brights) bits |= sbit(Steering_wheelMsg::bitBright);
     }
     if constexpr (FEAT_REGEN) {
-        if (regen_pressed) bits |= sbit(Steering_wheelMsg::bitRegen);
+        if (wheel.regen) bits |= sbit(Steering_wheelMsg::bitRegen);
     }
     if constexpr (FEAT_BRAKE_PIN) {
-        if (brake_pressed) bits |= sbit(Steering_wheelMsg::bitBrakeLights);
+        if (wheel.brake) bits |= sbit(Steering_wheelMsg::bitBrakeLights);
     }
 
     uint8_t data[2] = { (uint8_t)(bits & 0xFFu), (uint8_t)(bits >> 8) };
-    g_can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, canIDHelper(artemis_canid::steeringToPowerDistro), false, data, 2, XL2515::PRIORITY::Highest);
+    can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, canIDHelper(artemis_canid::steeringToPowerDistro), false, data, 2, XL2515::PRIORITY::Highest);
 }
 
 // Parse Power Distro → Steering Wheel and update status flags
 static void process_power_distro_status(uint8_t *data, uint8_t length)
 {
     if (length < 3) {
-        g_status_main_fault = 1;
-        g_status_aux_fault = 1;
+        status_main_fault = 1;
+        status_aux_fault = 1;
         // Make it so that a more sophisticated error than this is returned
         return;
     }
 
     using MB = PowerDistroMsg::MonitorBit;
-    g_status_main_fault = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::DcdcInvalid) | mbit(MB::MainMonitorError)) && (data[PowerDistroMsg::BYTE_MAIN] & 0x0F);
-    g_status_aux_fault  = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::AuxInvalid)  | mbit(MB::AuxMonitorError))  && (data[PowerDistroMsg::BYTE_AUX]  & 0x0F);
+    status_main_fault = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::DcdcInvalid) | mbit(MB::MainMonitorError)) && (data[PowerDistroMsg::BYTE_MAIN] & 0x0F);
+    status_aux_fault  = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::AuxInvalid)  | mbit(MB::AuxMonitorError))  && (data[PowerDistroMsg::BYTE_AUX]  & 0x0F);
 }
 
-// logic
-static void on_left_light(void)  { g_wheel.left_light  = !g_wheel.left_light;  }  // SW01
-static void on_right_light(void) { g_wheel.right_light = !g_wheel.right_light; }  // SW02
-static void on_hazards(void)     { g_wheel.hazards     = !g_wheel.hazards;     }  // SW03
-static void on_brights(void) { if constexpr (FEAT_BRIGHTS) g_wheel.brights = !g_wheel.brights; } // SW04 
-static void on_cruise_en(void) { if constexpr (FEAT_CRUISE_CONTROL) g_wheel.cruise = !g_wheel.cruise; } // SW05
+/*
+A note on toggle vs momentary buttons:
+Toggle buttons are toggled on the positive edge of the button pressed.
+Momentary buttons are on whenever the button is being pressed. This seems odd for a momentary 
+button, but this makes more sense because packets can be dropped on the CAN bus - the recipient
+device (like powerDistro) should be in charge of edge detection. 
+*/
+static void on_left_light(void)  { wheel.left_light  = !wheel.left_light;  }  // SW01
+static void on_right_light(void) { wheel.right_light = !wheel.right_light; }  // SW02
+static void on_hazards(void)     { wheel.hazards     = !wheel.hazards;     }  // SW03
+static void on_brights(void) { if constexpr (FEAT_BRIGHTS) wheel.brights = !wheel.brights; } // SW04 
+static void on_cruise_en(void) { if constexpr (FEAT_CRUISE_CONTROL) wheel.cruise = !wheel.cruise; } // SW05
 static void on_cruise_up(void)   { (void)0; }  // SW06 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
 static void on_cruise_down(void) { (void)0; }  // SW07 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
-static void on_horn(void)        { (void)0; }  // SW08 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
+static void on_horn(void)        { (void)0; }  // SW08 – horn bit held high while pressed; read from button_pressed in main loop
 static void on_ptt(void)         { (void)0; }  // SW09 – push-to-talk (no artemis_canid::steeringToPowerDistro field; reserve for radio if needed)
 static void on_regen(void)       { (void)0; }  // SW10 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
 
-// [row][col]. NULL = no button
 static constexpr uint32_t NumRows = 3;
 static constexpr uint32_t NumCols = 4;
-constexpr uint8_t rowPins[3] = {16, 17, 13};
-constexpr uint8_t colPins[4] = {15, 14, 18, 19};
-static const std::array<std::array<Matrix::button_handler_t, NumCols>, NumRows> button_handlers = {{
-    { on_left_light, on_right_light, on_hazards,    on_brights    },  /* row 0 */
-    { on_cruise_en,  on_cruise_up,   on_cruise_down, nullptr      },  /* row 1 */
-    { on_horn,       on_ptt,         on_regen,       nullptr      },  /* row 2 */
-}};
+constexpr uint8_t rowPins[NumRows] = {16, 17, 13};
+constexpr uint8_t colPins[NumCols] = {15, 14, 18, 19};
 
 int main()
 {
     pico_canlib::status errorCode;
-    errorCode = g_can.init();
+    errorCode = can.init();
     fprintf(stdout, "Init Code %d\n", errorCode);
 
     if (errorCode != pico_canlib::status::SUCCESS)
@@ -164,29 +174,31 @@ int main()
         gpio_pull_down(brakeInputPin);
     }
 
-    Matrix matrix(0, 1, 5, rowPins, NumRows, colPins, NumCols);
+    // [row][col] — must match the physical wiring layout in rowPins/colPins above
+    Matrix matrix(0, 1, 5, rowPins, NumRows, colPins, NumCols, {{
+        { on_left_light, on_right_light, on_hazards,    on_brights    },  /* row 0 */
+        { on_cruise_en,  on_cruise_up,   on_cruise_down, nullptr      },  /* row 1 */
+        { on_horn,       on_ptt,         on_regen,       nullptr      },  /* row 2 */
+    }});
     matrix.matrix_init();
     matrix.keypad_init_timer();
 
     while (true) {
-        bool brake = false;
-        if constexpr (FEAT_BRAKE_PIN) {
-            brake = gpio_get(brakeInputPin) != 0;
-        }
+        // Read momentary buttons directly from the matrix (held state)
+        wheel.horn        = matrix.button_pressed[2][0];
+        wheel.cruise_up   = matrix.button_pressed[1][1];
+        wheel.cruise_down = matrix.button_pressed[1][2];
+        wheel.regen       = matrix.button_pressed[2][2];
+        if constexpr (FEAT_BRAKE_PIN)
+            wheel.brake = gpio_get(brakeInputPin) != 0;
 
-        send_steering_wheel_can_state(
-            matrix.button_pressed[1][1],
-            matrix.button_pressed[1][2],
-            matrix.button_pressed[2][0],
-            matrix.button_pressed[2][2],
-            brake
-        );
+        send_steering_wheel_can_state(wheel);
 
         // Process received CAN (Power Distro → Steering Wheel artemis_canid::powerDistroToSteering).
         {
             // Buffer layout per new receiveCAN API: [0–3] id, [4] data length, [5–12] data
             uint8_t rx_buf[13];
-            if (!(int)g_can.receiveCAN(rx_buf, 4, 8)) {
+            if (!(int)can.receiveCAN(rx_buf, 4, 8)) {
                 uint32_t id;
                 memcpy(&id, rx_buf, 4);
                 if (id == canIDHelper(artemis_canid::powerDistroToSteering)) {
@@ -200,14 +212,14 @@ int main()
         static uint32_t led_tick = 0;
         led_tick++;
         bool led_on;
-        if (g_status_main_fault)
+        if (status_main_fault)
             led_on = (led_tick % 6) < 3;
-        else if (g_wheel.cruise)
+        else if (wheel.cruise)
             led_on = ((led_tick / 10) % 2 == 0);
         else
             led_on = (led_tick % 50 < 45);
         gpio_put(LEDPin, led_on ? 1 : 0);
 
-        accelerator.update(g_can);
+        accelerator.update(can);
     }
 }
