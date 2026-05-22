@@ -18,5 +18,5 @@ static constexpr uint8_t LEDPin = 25;
 
 static constexpr uint32_t NumRows = 3;
 static constexpr uint32_t NumCols = 4;
-constexpr uint8_t rowPins[NumRows] = {16, 17, 13};
-constexpr uint8_t colPins[NumCols] = {15, 14, 18, 19};
+constexpr uint8_t rowPins[NumRows] = {5, 4, 10};
+constexpr uint8_t colPins[NumCols] = {6, 7, 8};

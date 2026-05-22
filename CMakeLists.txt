@@ -6,11 +6,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# option(IS_SIMULATION "To enable simulation" ON)
-
-# Initialise pico_sdk from installed location
-# (note this can come from environment, CMake cache etc)
-
 # == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
 if(WIN32)
     set(USERHOME $ENV{USERPROFILE})
@@ -31,44 +26,48 @@ set(PICO_BOARD pico2 CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(pico_canlib C CXX ASM)
+project(pico_drawlib C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
-# Collect all .cpp files under Src/
+# pico_canlib as a static library; its Inc/ is PUBLIC so callers inherit it
+add_subdirectory(Src/pico_canlib)
+
+# Collect all sources under Src/, then strip out:
+#   - pico_canlib/  (built as a separate library above)
+#   - steering_wheel_main.cpp  (standalone entry point, superseded by merged main.cpp)
 file(GLOB_RECURSE SRC_FILES
     CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/Src/*.cpp"
     "${CMAKE_SOURCE_DIR}/Src/*.c"
-    "${CMAKE_SOURCE_DIR}/Src/pico_canlib/Src/*.cpp"
-    "${CMAKE_SOURCE_DIR}/Src/mcufont_decoder/*.c"
 )
-add_executable(pico_canlib ${SRC_FILES})
+list(FILTER SRC_FILES EXCLUDE REGEX ".*/pico_canlib/.*")
+list(FILTER SRC_FILES EXCLUDE REGEX ".*steering_wheel_main\\.cpp$")
 
-pico_set_program_name(pico_canlib "pico_canlib")
-pico_set_program_version(pico_canlib "0.1")
+add_executable(pico_drawlib ${SRC_FILES})
+
+pico_set_program_name(pico_drawlib "pico_drawlib")
+pico_set_program_version(pico_drawlib "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(pico_canlib 1)
-pico_enable_stdio_usb(pico_canlib 1)
+pico_enable_stdio_uart(pico_drawlib 1)
+pico_enable_stdio_usb(pico_drawlib 1)
 
-# Add the standard library to the build
-target_link_libraries(pico_canlib
-        pico_stdlib)
-
-# Add the standard include files to the build
-target_include_directories(pico_canlib PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/Inc
-        ${CMAKE_CURRENT_LIST_DIR}/Src/pico_canlib/Inc
-        ${CMAKE_CURRENT_LIST_DIR}/Src/mcufont_decoder
+target_include_directories(pico_drawlib PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/Inc
+    ${CMAKE_CURRENT_LIST_DIR}/Src/mcufont_decoder
+    # Src/pico_canlib/Inc is inherited via pico_canlib's PUBLIC include dirs
 )
 
-# get_target_property(PICO_INCLUDES pico_stdio_headers INTERFACE_INCLUDE_DIRECTORIES)
-# message(STATUS "Pico SDK includes: ${PICO_INCLUDES}")
+target_link_libraries(pico_drawlib
+    pico_stdlib
+    pico_multicore
+    hardware_spi
+    hardware_uart
+    hardware_timer
+    hardware_adc
+    pico_canlib
+)
 
-# Add any user requested libraries
-target_link_libraries(pico_canlib hardware_spi hardware_uart hardware_timer)
-
-pico_add_extra_outputs(pico_canlib)
+pico_add_extra_outputs(pico_drawlib)
