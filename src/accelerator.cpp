@@ -64,7 +64,7 @@ void Accelerator::send_motor_command(pico_canlib& can)
         max_velocity = motorPositiveRPM;
     }
     else if (m_drive_state == DriveDirection::Reverse) {
-        current  = m_pedal_value * 0.5f; //limit reverse to 50% power for safety
+        current  = m_pedal_value * 0.5f; // halve reverse speed so 
         max_velocity = motorNegativeRPM;
     }
     else {

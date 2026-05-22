@@ -60,6 +60,8 @@ target_link_libraries(artemis26-steering-wheel PRIVATE
     pico_canlib
     pico_stdlib
     hardware_adc
+    hardware_gpio
+    hardware_timer
+    hardware_irq
 )
-
 pico_add_extra_outputs(artemis26-steering-wheel)

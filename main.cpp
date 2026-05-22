@@ -7,22 +7,23 @@
 #include "accelerator.hpp"
 #include "features.hpp"
 #include "artemis_canid.hpp"
+#include "matrix.hpp"
 
 // Bit positions for artemis_canid::steeringToPowerDistro payload
-enum class SteeringWheelMsg : uint8_t {
+enum class Steering_wheelMsg : uint8_t {
     bitLeftLights = 0,
     bitRightLights = 1,
     bitHazard = 2,
     bitHorn = 3,
-    bitCruiseEn = 255,
-    bitCruiseUp = 255,
-    bitCruiseDown = 255,
-    bitBright = 255,
-    bitRegen = 255,
-    bitBrakeLights = 255,
+    bitCruiseEn = 4,
+    bitCruiseUp = 5,
+    bitCruiseDown = 6,
+    bitBright = 7,
+    bitRegen = 8,
+    bitBrakeLights = 9,
 };
 
-uint8_t sbit(SteeringWheelMsg b)
+uint8_t sbit(Steering_wheelMsg b)
 {
     return 1u << static_cast<uint8_t>(b);
 }
@@ -59,18 +60,18 @@ uint8_t mbit(PowerDistroMsg::MonitorBit b)
     return 1u << static_cast<uint8_t>(b);
 }
 
-// Cruise state
-static bool g_cruise_enabled = false;
-
-// Lights state
-static bool g_left_light_on  = false;
-static bool g_right_light_on = false;
-static bool g_hazards_on     = false;
-static bool g_brights_on     = false;
-
 // Last status from Power Distro
 static bool g_status_aux_fault  = false;
 static bool g_status_main_fault = false;
+
+struct WheelState {
+    bool left_light  = false;
+    bool right_light = false;
+    bool hazards     = false;
+    bool brights     = false;
+    bool cruise      = false;
+};
+static WheelState g_wheel;
 
 pico_canlib g_can = pico_canlib();
 
@@ -80,24 +81,24 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
 {
     uint16_t bits = 0;
 
-    if (g_left_light_on)  bits |= sbit(SteeringWheelMsg::bitLeftLights);
-    if (g_right_light_on) bits |= sbit(SteeringWheelMsg::bitRightLights);
-    if (g_hazards_on)     bits |= sbit(SteeringWheelMsg::bitHazard);
-    if (horn_pressed)     bits |= sbit(SteeringWheelMsg::bitHorn);
+    if (g_wheel.left_light)  bits |= sbit(Steering_wheelMsg::bitLeftLights);
+    if (g_wheel.right_light) bits |= sbit(Steering_wheelMsg::bitRightLights);
+    if (g_wheel.hazards)     bits |= sbit(Steering_wheelMsg::bitHazard);
+    if (horn_pressed)     bits |= sbit(Steering_wheelMsg::bitHorn);
 
     if constexpr (FEAT_CRUISE_CONTROL) {
-        if (g_cruise_enabled)    bits |= sbit(SteeringWheelMsg::bitCruiseEn);
-        if (cruise_up_pressed)   bits |= sbit(SteeringWheelMsg::bitCruiseUp);
-        if (cruise_down_pressed) bits |= sbit(SteeringWheelMsg::bitCruiseDown);
+        if (g_wheel.cruise)    bits |= sbit(Steering_wheelMsg::bitCruiseEn);
+        if (cruise_up_pressed)   bits |= sbit(Steering_wheelMsg::bitCruiseUp);
+        if (cruise_down_pressed) bits |= sbit(Steering_wheelMsg::bitCruiseDown);
     }
     if constexpr (FEAT_BRIGHTS) {
-        if (g_brights_on) bits |= sbit(SteeringWheelMsg::bitBright);
+        if (g_wheel.brights) bits |= sbit(Steering_wheelMsg::bitBright);
     }
     if constexpr (FEAT_REGEN) {
-        if (regen_pressed) bits |= sbit(SteeringWheelMsg::bitRegen);
+        if (regen_pressed) bits |= sbit(Steering_wheelMsg::bitRegen);
     }
     if constexpr (FEAT_BRAKE_PIN) {
-        if (brake_pressed) bits |= sbit(SteeringWheelMsg::bitBrakeLights);
+        if (brake_pressed) bits |= sbit(Steering_wheelMsg::bitBrakeLights);
     }
 
     uint8_t data[2] = { (uint8_t)(bits & 0xFFu), (uint8_t)(bits >> 8) };
@@ -107,38 +108,40 @@ static void send_steering_wheel_can_state(bool cruise_up_pressed, bool cruise_do
 // Parse Power Distro → Steering Wheel and update status flags
 static void process_power_distro_status(uint8_t *data, uint8_t length)
 {
-    if (length < 3)
+    if (length < 3) {
         g_status_main_fault = 1;
         g_status_aux_fault = 1;
         // Make it so that a more sophisticated error than this is returned
-    return;
+        return;
+    }
 
     using MB = PowerDistroMsg::MonitorBit;
-    g_status_main_fault = (data[PowerDistroMsg::BYTE_MONITOR] & mbit(MB::DcdcInvalid) & mbit(MB::MainMonitorError)) && (data[PowerDistroMsg::BYTE_MAIN] & 0x0F);
-    g_status_aux_fault  = (data[PowerDistroMsg::BYTE_MONITOR] & mbit(MB::AuxInvalid)  & mbit(MB::AuxMonitorError))  && (data[PowerDistroMsg::BYTE_AUX]  & 0x0F);
+    g_status_main_fault = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::DcdcInvalid) | mbit(MB::MainMonitorError)) && (data[PowerDistroMsg::BYTE_MAIN] & 0x0F);
+    g_status_aux_fault  = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::AuxInvalid)  | mbit(MB::AuxMonitorError))  && (data[PowerDistroMsg::BYTE_AUX]  & 0x0F);
 }
 
 // logic
-static void on_left_light(void)  { g_left_light_on  = !g_left_light_on;  }  // SW01
-static void on_right_light(void) { g_right_light_on = !g_right_light_on; }  // SW02
-static void on_hazards(void)     { g_hazards_on     = !g_hazards_on;     }  // SW03
-static void on_brights(void) { if constexpr (FEAT_BRIGHTS) g_brights_on = !g_brights_on; } // SW04 
-static void on_cruise_en(void) { if constexpr (FEAT_CRUISE_CONTROL) g_cruise_enabled = !g_cruise_enabled; } // SW05
+static void on_left_light(void)  { g_wheel.left_light  = !g_wheel.left_light;  }  // SW01
+static void on_right_light(void) { g_wheel.right_light = !g_wheel.right_light; }  // SW02
+static void on_hazards(void)     { g_wheel.hazards     = !g_wheel.hazards;     }  // SW03
+static void on_brights(void) { if constexpr (FEAT_BRIGHTS) g_wheel.brights = !g_wheel.brights; } // SW04 
+static void on_cruise_en(void) { if constexpr (FEAT_CRUISE_CONTROL) g_wheel.cruise = !g_wheel.cruise; } // SW05
 static void on_cruise_up(void)   { (void)0; }  // SW06 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
 static void on_cruise_down(void) { (void)0; }  // SW07 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
 static void on_horn(void)        { (void)0; }  // SW08 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
 static void on_ptt(void)         { (void)0; }  // SW09 – push-to-talk (no artemis_canid::steeringToPowerDistro field; reserve for radio if needed)
 static void on_regen(void)       { (void)0; }  // SW10 – momentary; sent as bit on artemis_canid::steeringToPowerDistro
 
-// Debounce: only trigger handlers on rising edge
-static bool prev_pressed[numRows][numColumns] = {{false}};
-
 // [row][col]. NULL = no button
-static const button_handler_t button_handlers[numRows][numColumns] = {
+static constexpr uint32_t NumRows = 3;
+static constexpr uint32_t NumCols = 4;
+constexpr uint8_t rowPins[3] = {16, 17, 13};
+constexpr uint8_t colPins[4] = {15, 14, 18, 19};
+static const std::array<std::array<Matrix::button_handler_t, NumCols>, NumRows> button_handlers = {{
     { on_left_light, on_right_light, on_hazards,    on_brights    },  /* row 0 */
-    { on_cruise_en,  on_cruise_up,   on_cruise_down, NULL         },  /* row 1 */
-    { on_horn,       on_ptt,         on_regen,       NULL         },  /* row 2 */
-};
+    { on_cruise_en,  on_cruise_up,   on_cruise_down, nullptr      },  /* row 1 */
+    { on_horn,       on_ptt,         on_regen,       nullptr      },  /* row 2 */
+}};
 
 int main()
 {
@@ -149,18 +152,9 @@ int main()
     if (errorCode != pico_canlib::status::SUCCESS)
         fprintf(stdout, "Failed Startup\n");
 
-    for (int r = 0; r < numRows; r++) {
-        gpio_init(row_pins[r]);
-        gpio_set_dir(row_pins[r], GPIO_IN);
-        gpio_pull_down(row_pins[r]);
-    }
-    for (int c = 0; c < numColumns; c++) {
-        gpio_init(col_pins[c]);
-        gpio_set_dir(col_pins[c], GPIO_OUT);
-        gpio_put(col_pins[c], 0);
-    }
     gpio_init(LEDPin);
     gpio_set_dir(LEDPin, GPIO_OUT);
+
     Accelerator accelerator;
     accelerator.init();
 
@@ -170,37 +164,21 @@ int main()
         gpio_pull_down(brakeInputPin);
     }
 
+    Matrix matrix(0, 1, 5, rowPins, NumRows, colPins, NumCols);
+    matrix.matrix_init();
+    matrix.keypad_init_timer();
+
     while (true) {
-        bool button_pressed[numRows][numColumns] = {{false}};
-
-        for (int col = 0; col < numColumns; col++) {
-            for (int c = 0; c < numColumns; c++) {
-                gpio_put(col_pins[c], (c == col));
-            }
-            sleep_ms(scanDelayMS);
-
-            for (int row = 0; row < numRows; row++) {
-                bool now = gpio_get(row_pins[row]) != 0;
-                button_pressed[row][col] = now;
-                if (now && !prev_pressed[row][col]) {
-                    button_handler_t handler = button_handlers[row][col];
-                    if (handler != NULL)
-                        handler();
-                }
-                prev_pressed[row][col] = now;
-            }
-        }
-
         bool brake = false;
         if constexpr (FEAT_BRAKE_PIN) {
             brake = gpio_get(brakeInputPin) != 0;
         }
 
         send_steering_wheel_can_state(
-            button_pressed[1][1],
-            button_pressed[1][2],
-            button_pressed[2][0],
-            button_pressed[2][2],
+            matrix.button_pressed[1][1],
+            matrix.button_pressed[1][2],
+            matrix.button_pressed[2][0],
+            matrix.button_pressed[2][2],
             brake
         );
 
@@ -224,7 +202,7 @@ int main()
         bool led_on;
         if (g_status_main_fault)
             led_on = (led_tick % 6) < 3;
-        else if (g_cruise_enabled)
+        else if (g_wheel.cruise)
             led_on = ((led_tick / 10) % 2 == 0);
         else
             led_on = (led_tick % 50 < 45);
