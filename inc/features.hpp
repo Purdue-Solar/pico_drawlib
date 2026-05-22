@@ -15,3 +15,8 @@ static constexpr uint8_t brakeInputPin = 255; // Not currently used
 
 // Output pin
 static constexpr uint8_t LEDPin = 25;
+
+static constexpr uint32_t NumRows = 3;
+static constexpr uint32_t NumCols = 4;
+constexpr uint8_t rowPins[NumRows] = {16, 17, 13};
+constexpr uint8_t colPins[NumCols] = {15, 14, 18, 19};
