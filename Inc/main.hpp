@@ -13,7 +13,8 @@
 Bit positions for artemis_canid::steeringToPowerDistro payload. The CAN 
 spreadsheet is the ultimate authority on the meaning of each bit.
 */ 
-enum class Steering_wheelMsg : uint8_t {
+enum class Steering_wheelMsg : uint8_t 
+{
     bitLeftLights = 0,
     bitRightLights = 1,
     bitHazard = 2,
@@ -35,7 +36,8 @@ uint8_t sbit(Steering_wheelMsg b)
 }
 
 // Layout of the Power Distro → Steering Wheel CAN message
-struct PowerDistroMsg {
+struct PowerDistroMsg 
+{
     static constexpr uint8_t BYTE_MONITOR = 0; // 0th byte
     static constexpr uint8_t BYTE_MAIN    = 1; // 1st byte
     static constexpr uint8_t BYTE_AUX     = 2; // 2nd byte
@@ -70,7 +72,8 @@ uint8_t mbit(PowerDistroMsg::MonitorBit b)
 static bool status_aux_fault  = false;
 static bool status_main_fault = false;
 
-struct WheelState {
+struct WheelState 
+{
     bool left_light  = false;
     bool right_light = false;
     bool hazards     = false;

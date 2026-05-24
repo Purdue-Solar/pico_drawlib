@@ -78,7 +78,9 @@ void Matrix::keypad_isr() {
         {
             state = true;
             if (m->button_handlers[i][m->currentCol])
+            {
                 m->button_handlers[i][m->currentCol]();
+            }
         }
         else if (!now && state)
         {

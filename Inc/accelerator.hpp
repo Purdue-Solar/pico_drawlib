@@ -6,7 +6,8 @@
 #include "pico_canlib.hpp" 
 
 // Drive states
-enum DriveDirection : uint8_t {
+enum DriveDirection : uint8_t 
+{
     Neutral = 0,
     Forward = 1,
     Reverse = 2,
@@ -16,7 +17,8 @@ static constexpr int32_t motorPositiveRPM = 20000;
 static constexpr int32_t motorNegativeRPM = -20000;
 static constexpr float pedalDeadzone = 0.05f; // 5% deadzone (can change if necessary)
 
-class Accelerator {
+class Accelerator 
+{
 public:
     void init();
     void update(pico_canlib &can);

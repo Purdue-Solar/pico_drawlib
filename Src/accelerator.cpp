@@ -11,10 +11,12 @@ void Accelerator::update_drive_state(void)
     bool forward = gpio_get(FNRForwardPin);
     bool reverse = gpio_get(FNRReversePin);
 
-    if(forward){
+    if(forward)
+    {
         m_drive_state = DriveDirection::Forward;
     }
-    else if(reverse){
+    else if(reverse)
+    {
         m_drive_state = DriveDirection::Reverse;
     }
     else{
@@ -30,7 +32,8 @@ void Accelerator::update_pedal_value(void)
     // convert to 0.0 - 1.0 to send to motor (can change if necessary)
     float converted_pedal = raw_pedal / 4095.0f;
 
-    if (converted_pedal < pedalDeadzone){
+    if (converted_pedal < pedalDeadzone)
+    {
         converted_pedal = 0.0f;
     }
     m_pedal_value = converted_pedal;
@@ -59,11 +62,13 @@ void Accelerator::send_motor_command(pico_canlib& can)
     float current = 0.0f;
     float max_velocity = 0.0f;
 
-    if (m_drive_state == DriveDirection::Forward) {
+    if (m_drive_state == DriveDirection::Forward) 
+    {
         current  = m_pedal_value;
         max_velocity = motorPositiveRPM;
     }
-    else if (m_drive_state == DriveDirection::Reverse) {
+    else if (m_drive_state == DriveDirection::Reverse)
+    {
         current  = m_pedal_value * 0.5f; // halve reverse speed so 
         max_velocity = motorNegativeRPM;
     }
