@@ -68,6 +68,7 @@ target_link_libraries(pico_drawlib
     hardware_timer
     hardware_adc
     pico_canlib
+    pico_multicore 
 )
 
 pico_add_extra_outputs(pico_drawlib)

@@ -3,27 +3,17 @@
 #include <stdio.h>
 #include <cstring>
 #include "ili9341.h"
-
-#ifdef SIMULATION
-#include "picosdk_sim.h"
-#else
-
-extern "C"
-{
-#include "pico/stdio.h"
-#include "pico/time.h"
-#include "hardware/gpio.h"
-#include "pdl.h"
-#include "gfx.h"
-}
-
+#include "multicore.hpp"
 #include "pico_canlib.hpp"
 #include "artemis_canid.hpp"
-#endif
+
+PDLInfo sharedInfo = {0};
+mutex_t info_mutex;
 
 int main()
 {
     stdio_init_all();
+    mutex_init(&info_mutex);
     pico_canlib can = pico_canlib();
     pico_canlib::status errorCode;
     errorCode = can.init();
@@ -55,24 +45,15 @@ int main()
     matrix.matrix_init();
     matrix.keypad_init_timer();
 
-    PDLInfo info = {0};
     uint8_t buffer[13];
     uint32_t id;
     uint8_t data[8];
 
-    LCD_setPins(20, 17, 21, 18, 19);
-    LCD_setSPIperiph(spi0);
-    LCD_initDisplay();
-    LCD_setRotation(1);
-    GFX_createFramebuf();
+    multicore_launch_core1(core1_entry);
 
-#ifdef SIMULATION
-    LCDSim_InitWindow();
-    while (!LCDSim_WindowShouldClose())
-#else
-    while (true) 
-#endif
+    while(true)
     {
+        mutex_enter_blocking(&info_mutex);
         // Read momentary buttons directly from the matrix (held state)
         wheel.horn        = matrix.button_pressed[2][0];
         wheel.cruise_up   = matrix.button_pressed[1][1];
@@ -83,7 +64,7 @@ int main()
             wheel.brake = gpio_get(brakeInputPin) != 0;
         }
 
-        send_steering_wheel_can_state(wheel);
+        send_steering_wheel_can_state(wheel, &can);
 
         // Process received CAN (Power Distro → Steering Wheel artemis_canid::powerDistroToSteering).
         {
@@ -98,31 +79,25 @@ int main()
                 {
                 case canIDHelper(artemis_canid::powerDistroToSteering):
                     // Use rx_buf[4] to pass data length
-                    process_power_distro_status(data, rx_buf[4]);
+                    process_power_distro_status(data, rx_buf[4], &sharedInfo);
                     break;
                 case canIDHelper(artemis_canid::tempAndSOC):
-                    info.battery_temperature = data[7];
-                    info.battery_soc = data[4];
+                    sharedInfo.battery_temperature = data[7];
+                    sharedInfo.battery_soc = data[4];
                     break;
                 case canIDHelper(artemis_canid::setMotorCurrent):
-                    info.motor_current = data[7] << 24 | data[6] << 16 | data[5] << 8 | data[4];
+                    sharedInfo.motor_current = data[7] << 24 | data[6] << 16 | data[5] << 8 | data[4];
                     break;
                 case canIDHelper(artemis_canid::motorVelocity):
-                    info.motor_velocity = data[7] << 24 | data[6] << 16 | data[5] << 8 | data[4];
+                    sharedInfo.motor_velocity = data[7] << 24 | data[6] << 16 | data[5] << 8 | data[4];
                     break;
                 }
             }
         }
 
         accelerator.update(can);
-        info.motor_velocity++;
+        //sharedInfo.motor_velocity++;
 
-        pdl_draw(&info);
-        #ifdef SIMULATION
-        LCDSim_Redraw();
-        #endif
+        mutex_exit(&info_mutex);
         }
-#ifdef SIMULATION
-    LCDSim_CloseWindow();
-#endif
 }

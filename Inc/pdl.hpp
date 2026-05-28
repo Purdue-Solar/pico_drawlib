@@ -30,6 +30,43 @@
 
 |--40--|----------------------------280------------------------------|
 */
+// Layout of the Power Distro → Steering Wheel CAN message
+struct PowerDistroMsg 
+{
+    static constexpr uint8_t BYTE_MONITOR = 0; // 0th byte
+    static constexpr uint8_t BYTE_MAIN    = 1; // 1st byte
+    static constexpr uint8_t BYTE_AUX     = 2; // 2nd byte
+
+    // Bit positions within the monitor byte
+    enum class MonitorBit : uint8_t {
+        DcdcInvalid      = 0,
+        AuxInvalid       = 1,
+        MainMonitorError = 2,
+        AuxMonitorError  = 3,
+    };
+
+    // Shared bit layout for the MAIN and AUX output bytes
+    enum class OutputBit : uint8_t {
+        VoltageHighError = 0,
+        VoltageLowError  = 1,
+        CurrentHighError = 2,
+        CurrentLowError  = 3,
+        VoltageHighWarn  = 4,
+        VoltageLowWarn   = 5,
+        CurrentHighWarn  = 6,
+        CurrentLowWarn   = 7,
+    };
+};
+
+inline uint8_t mbit(PowerDistroMsg::MonitorBit b)
+{
+    return 1u << static_cast<uint8_t>(b);
+}
+
+inline uint8_t obit(PowerDistroMsg::OutputBit b)
+{
+    return 1u << static_cast<uint8_t>(b);
+}
 
 typedef struct PDLInfo
 {
@@ -43,25 +80,9 @@ typedef struct PDLInfo
     uint32_t motor_current;
     uint32_t motor_velocity;
 
-    bool aux_over_voltage;
-    bool aux_under_voltage;
-    bool aux_over_current;
-    bool aux_current_warning;
-
-    bool main_over_voltage;
-    bool main_under_voltage;
-    bool main_over_current;
-    bool main_current_warning;
-    // uint8_t aux_condition; // 4 bits
-    bool main_valid; // DC valid
-    bool aux_valid;
-
-    // uint32_t velocity;
-
-    // uint32_t motor_temperature;
-
-    // unsigned int aux_current;
-    // unsigned int aux_voltage;
+    uint8_t monitor_status;
+    uint8_t main_status;
+    uint8_t aux_status;
 } PDLInfo;
 
 #define PDL_WIDTH 320

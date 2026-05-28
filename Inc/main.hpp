@@ -9,6 +9,7 @@
 #include "features.hpp"
 #include "artemis_canid.hpp"
 #include "matrix.hpp"
+#include "pdl.hpp"
 /*
 Bit positions for artemis_canid::steeringToPowerDistro payload. The CAN 
 spreadsheet is the ultimate authority on the meaning of each bit.
@@ -30,47 +31,10 @@ enum class Steering_wheelMsg : uint8_t
 /*
 Shortcut for bitshift, accounts for fact that enumClass interprets data as class rather than actual type
 */
-uint8_t sbit(Steering_wheelMsg b)
+inline uint8_t sbit(Steering_wheelMsg b)
 {
     return 1u << static_cast<uint8_t>(b);
 }
-
-// Layout of the Power Distro → Steering Wheel CAN message
-struct PowerDistroMsg 
-{
-    static constexpr uint8_t BYTE_MONITOR = 0; // 0th byte
-    static constexpr uint8_t BYTE_MAIN    = 1; // 1st byte
-    static constexpr uint8_t BYTE_AUX     = 2; // 2nd byte
-
-    // Bit positions within the monitor byte
-    enum class MonitorBit : uint8_t {
-        DcdcInvalid      = 0,
-        AuxInvalid       = 1,
-        MainMonitorError = 2,
-        AuxMonitorError  = 3,
-    };
-
-    // Shared bit layout for the MAIN and AUX output bytes
-    enum class OutputBit : uint8_t {
-        VoltageHighError = 0,
-        VoltageLowError  = 1,
-        CurrentHighError = 2,
-        CurrentLowError  = 3,
-        VoltageHighWarn  = 4,
-        VoltageLowWarn   = 5,
-        CurrentHighWarn  = 6,
-        CurrentLowWarn   = 7,
-    };
-};
-
-uint8_t mbit(PowerDistroMsg::MonitorBit b)
-{
-    return 1u << static_cast<uint8_t>(b);
-}
-
-// Last status from Power Distro
-static bool status_aux_fault  = false;
-static bool status_main_fault = false;
 
 struct WheelState 
 {
@@ -87,10 +51,8 @@ struct WheelState
 };
 static WheelState wheel;
 
-pico_canlib can = pico_canlib();
-
 // Steering Wheel → Power Distro
-static void send_steering_wheel_can_state(WheelState wheel)
+static void send_steering_wheel_can_state(WheelState wheel, pico_canlib * can)
 {
     uint16_t bits = 0;
 
@@ -115,22 +77,22 @@ static void send_steering_wheel_can_state(WheelState wheel)
     }
 
     uint8_t data[2] = { (uint8_t)(bits & 0xFFu), (uint8_t)(bits >> 8) };
-    can.transmitCAN(XL2515::TX_BUFFER_SEL::TX0, canIDHelper(artemis_canid::steeringToPowerDistro), false, data, 2, XL2515::PRIORITY::Highest);
+    can->transmitCAN(XL2515::TX_BUFFER_SEL::TX0, canIDHelper(artemis_canid::steeringToPowerDistro), false, data, 2, XL2515::PRIORITY::Highest);
 }
 
 // Parse Power Distro → Steering Wheel and update status flags
-static void process_power_distro_status(uint8_t *data, uint8_t length)
+static void process_power_distro_status(uint8_t *data, uint8_t length, PDLInfo* info)
 {
     if (length < 3) {
-        status_main_fault = 1;
-        status_aux_fault = 1;
-        // Make it so that a more sophisticated error than this is returned
+        info -> monitor_status = 255; // This indicates that everything is in the error state
+        info -> main_status = 255;
+        info -> aux_status = 255;
         return;
     }
 
-    using MB = PowerDistroMsg::MonitorBit;
-    status_main_fault = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::DcdcInvalid) | mbit(MB::MainMonitorError)) && (data[PowerDistroMsg::BYTE_MAIN] & 0x0F);
-    status_aux_fault  = (data[PowerDistroMsg::BYTE_MONITOR] | mbit(MB::AuxInvalid)  | mbit(MB::AuxMonitorError))  && (data[PowerDistroMsg::BYTE_AUX]  & 0x0F);
+    info -> monitor_status = data[PowerDistroMsg::BYTE_MONITOR];
+    info -> main_status = data[PowerDistroMsg::BYTE_MAIN];
+    info -> aux_status = data[PowerDistroMsg::BYTE_AUX];
 }
 
 /*
