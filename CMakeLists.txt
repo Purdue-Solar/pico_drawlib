@@ -32,7 +32,7 @@ project(pico_drawlib C CXX ASM)
 pico_sdk_init()
 
 # pico_canlib as a static library; its Inc/ is PUBLIC so callers inherit it
-add_subdirectory(Src/pico_canlib)
+add_subdirectory(../pico_canlib)
 
 # Collect all sources under Src/, then strip out:
 #   - pico_canlib/  (built as a separate library above)
