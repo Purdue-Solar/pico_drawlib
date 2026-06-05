@@ -36,8 +36,8 @@ pico_sdk_init()
 #   - steering_wheel_main.cpp  (standalone entry point, superseded by merged main.cpp)
 file(GLOB_RECURSE SRC_FILES
     CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/Src/*.cpp"
-    "${CMAKE_SOURCE_DIR}/Src/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/*.c"
 )
 list(FILTER SRC_FILES EXCLUDE REGEX ".*/pico_canlib/.*")
 list(FILTER SRC_FILES EXCLUDE REGEX ".*steering_wheel_main\\.cpp$")
