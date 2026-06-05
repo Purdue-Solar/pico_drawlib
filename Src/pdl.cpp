@@ -37,6 +37,16 @@ uint16_t get_color_bat(warningSeverity warning)
     return retval;
 }
 
+void pdl_init(spi_inst_t *spi, uint dc, uint cs, uint rst, uint sck, uint mosi)
+{
+    LCD_setPins(dc, cs, rst, sck, mosi);
+    LCD_setSPIperiph(spi);
+    LCD_initDisplay();
+    LCD_setRotation(1);
+    GFX_createFramebuf();
+}
+
+
 // for storing conversions from number to string
 char buf[32];
 const char *num_to_str(int num)

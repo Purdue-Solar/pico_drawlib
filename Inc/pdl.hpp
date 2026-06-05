@@ -2,6 +2,7 @@
 #define PDL_H
 
 #include "mcufont.h"
+#include "hardware/spi.h"
 
 /*
 
@@ -30,6 +31,8 @@
 
 |--40--|----------------------------280------------------------------|
 */
+void pdl_init(spi_inst_t *spi, uint dc, uint cs, uint rst, uint sck, uint mosi);
+
 // Layout of the Power Distro → Steering Wheel CAN message
 struct PowerDistroMsg 
 {
@@ -94,15 +97,6 @@ typedef struct PDLInfo
 #define PDL_CENTERPANEL_RIGHT (PDL_CENTERPANEL_LEFT + PDL_CENTERPANEL_WIDTH)
 #define PDL_MAIN_BOTTOM (PDL_HEIGHT - PDL_WARNING_HEIGHT)
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
-    void pdl_draw(const PDLInfo *info);
-
-#ifdef __cplusplus
-}
-#endif
+void pdl_draw(const PDLInfo *info);
 
 #endif // !PDL_H
