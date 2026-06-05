@@ -166,6 +166,10 @@ static void pdl_draw_stat(const char *name, uint16_t color, int16_t x, int16_t y
     pdl_draw_text(textx, y, align, FNTSMALL, WHITE, name);
 }
 
+/**
+This function draws fault information for the main and auxillary batteries. Their color of the icon
+corresponds to the severity of the warning, which is defined in warningSeverity
+ */
 static void pdl_draw_battery_stats(
     enum mf_align_t align, int16_t x, int16_t y, uint8_t data)
 {
@@ -189,6 +193,10 @@ static void pdl_draw_battery_stats(
     pdl_draw_stat("Cu", get_color_bat(current), x, y, align);
 }
 
+/**
+This function draws fault information for the power monitors on the power distor board. IF there is a fault,
+the color chosen is orange. Either way, the stats are drawn using pdl_draw_stat. 
+ */
 static void pdl_draw_monitor_stats(
     enum mf_align_t align1, enum mf_align_t align2, int16_t x1, int16_t x2, int16_t y, uint8_t data)
 {
