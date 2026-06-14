@@ -226,9 +226,9 @@ void pdl_draw(const PDLInfo *info)
     pdl_draw_text(0, 0, MF_ALIGN_LEFT, FNTSMALL, WHITE, "MAIN");
     pdl_draw_text(PDL_WIDTH, 0, MF_ALIGN_RIGHT, FNTSMALL, WHITE, "AUX");
 
-    pdl_draw_text(PDL_WIDTH / 2, -10, MF_ALIGN_CENTER, FNTBIG, WHITE, num_to_str(info->motor_velocity));
+    pdl_draw_text(PDL_WIDTH / 2, -10, MF_ALIGN_CENTER, FNTBIG, WHITE, num_to_str((int)info->vehicle_velocity));
     pdl_draw_text(PDL_WIDTH / 2, 30, MF_ALIGN_CENTER, FNTSMALL, WHITE, "mph");
-    pdl_draw_text(PDL_WIDTH / 2, 50, MF_ALIGN_CENTER, FNTBIG, WHITE, num_to_str(info->motor_current));
+    pdl_draw_text(PDL_WIDTH / 2, 50, MF_ALIGN_CENTER, FNTBIG, WHITE, num_to_str((int)info->motor_bus_current));
     pdl_draw_text(PDL_WIDTH / 2, 90, MF_ALIGN_CENTER, FNTSMALL, WHITE, "Amps");
 
     pdl_draw_battery_stats(
