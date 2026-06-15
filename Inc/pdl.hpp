@@ -5,7 +5,7 @@
 #include "hardware/spi.h"
 
 /*
-
+Outdated sry
 |---------------------------------320--------------------------------|
 
 |--------80--------|--------------160-------------|--------80--------|
@@ -125,6 +125,9 @@ typedef struct PDLInfo
     bool mc_bus_stale;
     bool mc_speed_stale;
     bool mc_temp_stale;
+
+    // ── UI state ─────────────────────────────────────────────────────
+    bool show_diagnostics;  // toggled by button press; selects diagnostics page over main page
 } PDLInfo;
 
 #define PDL_WIDTH 320

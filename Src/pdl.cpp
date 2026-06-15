@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "pdl.hpp"
+#include "artemis_canid.hpp"
 
 extern "C"
 {
@@ -27,11 +28,11 @@ uint16_t get_color_bat(warningSeverity warning)
 {
     uint16_t retval = WHITE;
     switch (warning) {
-        case ERRORLOW: retval = ILI9341_MAGENTA;
-        case WARNINGLOW: ILI9341_BLUE;
-        case GOOD: ILI9341_GREEN;
-        case WARNINGHIGH: ILI9341_YELLOW;
-        case ERRORHIGH: ILI9341_ORANGE;
+        case ERRORLOW:    retval = ILI9341_MAGENTA; break;
+        case WARNINGLOW:  retval = ILI9341_BLUE;    break;
+        case GOOD:        retval = ILI9341_GREEN;   break;
+        case WARNINGHIGH: retval = ILI9341_YELLOW;  break;
+        case ERRORHIGH:   retval = ILI9341_ORANGE;  break;
     }
 
     return retval;
@@ -77,29 +78,114 @@ static uint16_t mix_color(uint16_t x, uint16_t y, uint8_t a)
     return (r << 11) | (g << 5) | b;
 }
 
+// ─── Warning banner (highest-priority active condition) ───────────────────────
+// Priority order matches the spec: isolation → CAN stale → battery faults →
+// motor faults → LV faults → LV warnings.
+
 const char *pdl_get_warning_message(const PDLInfo *info)
 {
-    if ((info -> main_status) & obit(PowerDistroMsg::OutputBit::VoltageHighError)) {return "Voltage High ERROR Main LV Bus";}
-    if ((info -> main_status) & obit(PowerDistroMsg::OutputBit::VoltageLowError)) {return "Voltage Low ERROR Main LV Bus";}
-    if ((info -> main_status) & obit(PowerDistroMsg::OutputBit::CurrentHighError)) {return "Current High ERROR Main LV Bus";}
-    if ((info -> main_status) & obit(PowerDistroMsg::OutputBit::CurrentLowError)) {return "Current Low ERROR Main LV Bus";}
+    using D1  = BmsDtcFlags1;
+    using D21 = BmsDtcFlags21;
+    using D22 = BmsDtcFlags22;
+    using PM  = PowerDistroMsg::MonitorBit;
+    using PO  = PowerDistroMsg::OutputBit;
+    using ML  = McLimitFlags;
 
-    if ((info -> monitor_status) & mbit(PowerDistroMsg::MonitorBit::DcdcInvalid)) {return "Voltage Invalid ERROR Main LV Bus";}
-    if ((info -> monitor_status) & mbit(PowerDistroMsg::MonitorBit::MainMonitorError)) {return "Communication ERROR Main LV Bus";}
+    // Isolation fault
+    if (info->bms_dtc_flags2_2 & sbit(D22::HighVoltageIsolationFault))
+        return "ISOLATION FAULT";
 
+    // CAN state — most safety-critical messages first
+    if (info->bms_safety_stale)   return "CAN: BMS Safety Stale";
+    if (info->bms_voltage_stale)  return "CAN: BMS Voltage Stale";
+    if (info->bms_power_stale)    return "CAN: BMS Power Stale";
+    if (info->mc_errors_stale)    return "CAN: MC Errors Stale";
+    if (info->mc_bus_stale)       return "CAN: MC Bus Stale";
+    if (info->mc_speed_stale)     return "CAN: MC Speed Stale";
+    if (info->mc_temp_stale)      return "CAN: MC Temp Stale";
+    if (info->power_distro_stale) return "CAN: Distro Stale";
 
-    if ((info -> aux_status) & obit(PowerDistroMsg::OutputBit::VoltageHighError)) {return "Voltage High ERROR Aux LV Bus";}
-    if ((info -> aux_status) & obit(PowerDistroMsg::OutputBit::VoltageLowError)) {return "Voltage Low ERROR Aux LV Bus";}
-    if ((info -> aux_status) & obit(PowerDistroMsg::OutputBit::CurrentHighError)) {return "Current High ERROR Aux LV Bus";}
-    if ((info -> aux_status) & obit(PowerDistroMsg::OutputBit::CurrentLowError)) {return "Current Low ERROR Aux LV Bus";}
+    // Battery voltage error (high before low)
+    if (info->bms_dtc_flags2_1 & sbit(D21::HighestCellVoltageAbove5vFault))
+        return "Battery Voltage HIGH";
+    if ((info->bms_dtc_flags1  & (sbit(D1::HighestCellVoltageTooLowFault) | sbit(D1::LowestCellVoltageTooLowFault))) ||
+        (info->bms_dtc_flags2_1 & (sbit(D21::LowCellVoltageFault) | sbit(D21::WeakCellFault))))
+        return "Battery Voltage LOW";
 
-    if ((info -> monitor_status) & mbit(PowerDistroMsg::MonitorBit::AuxInvalid)) {return "Voltage Invalid ERROR Aux LV Bus";}
-    if ((info -> monitor_status) & mbit(PowerDistroMsg::MonitorBit::AuxMonitorError)) {return "Communication ERROR Aux LV Bus";}
+    // Battery current error
+    if ((info->bms_dtc_flags1  & sbit(D1::DischargeLimitEnforcementFault)) ||
+        (info->bms_dtc_flags2_1 & sbit(D21::CurrentSensorFault))           ||
+        (info->bms_dtc_flags2_2 & sbit(D22::ChargeLimitEnforcementFault)))
+        return "Battery Current Fault";
 
-    // Note: We don't display warnings because we want to get the user's attention when there is an error
+    // Battery temp error
+    if ((info->bms_dtc_flags1  & sbit(D1::PackTooHotFault)) ||
+        (info->bms_dtc_flags2_2 & (sbit(D22::ThermistorFault) | sbit(D22::FanMonitorFault))))
+        return "Battery Temp Fault";
+
+    // Misc BMS error (remaining DTC flags not covered above)
+    {
+        const uint8_t misc1  = sbit(D1::ChargerSafetyRelayFault)          |
+                               sbit(D1::InternalHardwareFault)            |
+                               sbit(D1::InternalHeatsinkThermistorFault)  |
+                               sbit(D1::InternalSoftwareFault);           
+        const uint8_t misc21 = sbit(D21::InternalCommunicationFault)      |
+                               sbit(D21::CellBalancingStuckOffFault)      |
+                               sbit(D21::OpenWiringFault)                 |
+                               sbit(D21::CellAsicFault);                  
+        const uint8_t misc22 = sbit(D22::WeakPackFault)                   |
+                               sbit(D22::ExternalCommunicationFault)      |
+                               sbit(D22::RedundantPowerSupplyFault)       |
+                               sbit(D22::InputPowerSupplyFault);
+        if ((info->bms_dtc_flags1  & misc1)  ||
+            (info->bms_dtc_flags2_1 & misc21) ||
+            (info->bms_dtc_flags2_2 & misc22))
+            return "BMS Fault";
+    }
+
+    // Motor fault (error flags bits 16–32)
+    if (info->mc_error_flags1 || info->mc_error_flags2)
+        return "Motor Controller Fault";
+
+    // BENFIX
+    // Motor temp error (IPM/motor temperature limit active)
+    if (info->mc_limit_flags & sbit(ML::IpmMotorTemperature))
+        return "Motor Temp Limit";
+
+    // 9. Aux LV fault (hardware or comms)
+    if ((info->monitor_status & mbit(PM::AuxInvalid))     ||
+        (info->monitor_status & mbit(PM::AuxMonitorError)))
+        return "Aux LV Fault";
+
+    // 10. Main LV fault (hardware or comms)
+    if ((info->monitor_status & mbit(PM::DcdcInvalid))       ||
+        (info->monitor_status & mbit(PM::MainMonitorError)))
+        return "Main LV Fault";
+
+    // 11–12. Aux LV over/under voltage and current (errors before warnings)
+    if (info->aux_status & obit(PO::VoltageHighError))  return "Aux LV Overvoltage ERROR";
+    if (info->aux_status & obit(PO::VoltageLowError))   return "Aux LV Undervoltage ERROR";
+    if (info->aux_status & obit(PO::CurrentHighError))  return "Aux LV Overcurrent ERROR";
+    if (info->aux_status & obit(PO::CurrentLowError))   return "Aux LV Undercurrent ERROR";
+    if (info->aux_status & obit(PO::VoltageHighWarn))   return "Aux LV Overvoltage WARN";
+    if (info->aux_status & obit(PO::VoltageLowWarn))    return "Aux LV Undervoltage WARN";
+    if (info->aux_status & obit(PO::CurrentHighWarn))   return "Aux LV Overcurrent WARN";
+    if (info->aux_status & obit(PO::CurrentLowWarn))    return "Aux LV Undercurrent WARN";
+
+    // 13–14. Main LV over/under voltage and current (errors before warnings)
+    if (info->main_status & obit(PO::VoltageHighError)) return "Main LV Overvoltage ERROR";
+    if (info->main_status & obit(PO::VoltageLowError))  return "Main LV Undervoltage ERROR";
+    if (info->main_status & obit(PO::CurrentHighError)) return "Main LV Overcurrent ERROR";
+    if (info->main_status & obit(PO::CurrentLowError))  return "Main LV Undercurrent ERROR";
+    if (info->main_status & obit(PO::VoltageHighWarn))  return "Main LV Overvoltage WARN";
+    if (info->main_status & obit(PO::VoltageLowWarn))   return "Main LV Undervoltage WARN";
+    if (info->main_status & obit(PO::CurrentHighWarn))  return "Main LV Overcurrent WARN";
+    if (info->main_status & obit(PO::CurrentLowWarn))   return "Main LV Undercurrent WARN";
 
     return NULL;
 }
+
+// ─── Font / text rendering ────────────────────────────────────────────────────
 
 typedef enum FontSize
 {
@@ -145,18 +231,15 @@ void pdl_draw_text(int16_t x0, int16_t y0, enum mf_align_t align, FontSize size,
     mf_render_aligned(state.font, x0, y0, align, text, 0, char_cb, &state);
 }
 
+// ─── LV peripheral status indicators (used on diagnostics page) ──────────────
+
 // align is either left or right
 // if align is left,  then things are drawn to the RIGHT of (x, y)
 // if align is right, then things are drawn to the LEFT  of (x, y)
-// I know this is confusing, but this is EXACTLY how MCUFont does it.
-// I'm sorry.
-// (also I know we're using an MCUFont enum here, but I don't want to declare a new enum)
 static void pdl_draw_stat(const char *name, uint16_t color, int16_t x, int16_t y, enum mf_align_t align)
 {
-    // `value`'s square's width and height
     const int valw = 15;
     const int valh = 30;
-    // width between value square and text
     const int textpad = 5;
 
     int valx = (align == MF_ALIGN_LEFT) ? x : x - valw;
@@ -166,10 +249,6 @@ static void pdl_draw_stat(const char *name, uint16_t color, int16_t x, int16_t y
     pdl_draw_text(textx, y, align, FNTSMALL, WHITE, name);
 }
 
-/**
-This function draws fault information for the main and auxillary batteries. Their color of the icon
-corresponds to the severity of the warning, which is defined in warningSeverity
- */
 static void pdl_draw_battery_stats(
     enum mf_align_t align, int16_t x, int16_t y, uint8_t data)
 {
@@ -193,18 +272,14 @@ static void pdl_draw_battery_stats(
     pdl_draw_stat("Cu", get_color_bat(current), x, y, align);
 }
 
-/**
-This function draws fault information for the power monitors on the power distor board. IF there is a fault,
-the color chosen is orange. Either way, the stats are drawn using pdl_draw_stat. 
- */
 static void pdl_draw_monitor_stats(
     enum mf_align_t align1, enum mf_align_t align2, int16_t x1, int16_t x2, int16_t y, uint8_t data)
 {
     using PM = PowerDistroMsg::MonitorBit;
     uint16_t dcdcFault = (data & mbit(PM::DcdcInvalid)) ? ILI9341_ORANGE : ILI9341_GREEN;
     uint16_t auxFault = (data & mbit(PM::AuxInvalid)) ? ILI9341_ORANGE : ILI9341_GREEN;
-    uint16_t commsFault = (data & (mbit(PM::MainMonitorError) | mbit(PM::AuxMonitorError))) ? ILI9341_ORANGE : ILI9341_GREEN;  
-    uint16_t debugFault = ILI9341_GREEN; // feel free to use this for debugging!
+    uint16_t commsFault = (data & (mbit(PM::MainMonitorError) | mbit(PM::AuxMonitorError))) ? ILI9341_ORANGE : ILI9341_GREEN;
+    uint16_t debugFault = ILI9341_GREEN;
 
     pdl_draw_stat("LF", dcdcFault, x1, y, align1);
     pdl_draw_stat("AF", auxFault, x2, y, align2);
@@ -213,31 +288,172 @@ static void pdl_draw_monitor_stats(
     pdl_draw_stat("??", debugFault, x2, y, align2);
 }
 
+// ─── Page-specific helpers ────────────────────────────────────────────────────
+
+static const char *pdl_get_vehicle_state(const PDLInfo *info)
+{
+    if (info->bms_safety_stale || info->power_distro_stale) return "---";
+
+    using RS1 = BmsRelayState1;
+    using PM  = PowerDistroMsg::MonitorBit;
+
+    const uint8_t monitor_fault_mask = mbit(PM::DcdcInvalid)     |
+                                       mbit(PM::AuxInvalid)       |
+                                       mbit(PM::MainMonitorError) |
+                                       mbit(PM::AuxMonitorError);
+
+    bool discharge_enabled = (info->bms_relay_state1 & sbit(RS1::DischargeRelayEnabled)) != 0;
+    bool monitor_fault     = (info->monitor_status & monitor_fault_mask) != 0;
+    // monitor_status bit 4 is repurposed as precharge resistor active
+    bool precharge_active  = (info->monitor_status >> 4) & 1;
+
+    if (monitor_fault || !discharge_enabled)
+        return "FAULT";
+
+    if (precharge_active)
+        return "PRECHARGE";
+
+    return "RUNNING";
+}
+
+static int pdl_count_warnings(const PDLInfo *info)
+{
+    return __builtin_popcount(info->bms_dtc_flags1)
+         + __builtin_popcount(info->bms_dtc_flags2_1)
+         + __builtin_popcount(info->bms_dtc_flags2_2)
+         + __builtin_popcount(info->mc_error_flags1)
+         + __builtin_popcount(info->mc_error_flags2);
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+//
+// Layout (320×200 content area, y=0..200):
+//   y=2    Vehicle speed (FNTBIG, center)
+//   y=44   "mph" label (FNTSMALL, center)
+//   y=68   SOC  |  Pack Power
+//   y=94   DCL  |  Current limit status
+//   y=120  Vehicle state  |  Heatsink temp
+//   y=152  Warning/Error count (center, yellow if >0)
+
+static void pdl_draw_main_page(const PDLInfo *info)
+{
+    char line[48];
+
+    pdl_draw_text(PDL_WIDTH / 2, 2,  MF_ALIGN_CENTER, FNTBIG,   WHITE, num_to_str((int)info->vehicle_velocity));
+    pdl_draw_text(PDL_WIDTH / 2, 44, MF_ALIGN_CENTER, FNTSMALL, WHITE, "mph");
+
+    const int16_t L = 5;
+    const int16_t R = PDL_WIDTH - 5;
+
+    // SOC | Pack Power
+    snprintf(line, sizeof(line), "SOC: %d%%", info->battery_soc);
+    pdl_draw_text(L, 68, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "Pwr: %.1f kW", info->battery_power_kw / 100.0f);
+    pdl_draw_text(R, 68, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+
+    // DCL | Current limit status (lowest 8 bits of MC status word)
+    snprintf(line, sizeof(line), "DCL: %dA", info->pack_dcl);
+    pdl_draw_text(L, 94, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "CLim: 0x%02X", info->mc_limit_flags);
+    pdl_draw_text(R, 94, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+
+    // Vehicle state | Heatsink temp
+    snprintf(line, sizeof(line), "St: %s", pdl_get_vehicle_state(info));
+    pdl_draw_text(L, 120, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "HS: %.0f C", info->heat_sink_temp);
+    pdl_draw_text(R, 120, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+
+    // Warning/Error count
+    int wcount = pdl_count_warnings(info);
+    uint16_t wcolor = (wcount > 0) ? ILI9341_YELLOW : WHITE;
+    snprintf(line, sizeof(line), "Warnings/Errors: %d", wcount);
+    pdl_draw_text(PDL_WIDTH / 2, 152, MF_ALIGN_CENTER, FNTSMALL, wcolor, line);
+}
+
+// ─── Diagnostics page ────────────────────────────────────────────────────────
+//
+// Layout (320×200 content area):
+//   y=5..93  Two-column text data (5 rows × 22px)
+//   y=113    Divider line
+//   y=116    Section labels: MAIN  |  MON  |  AUX
+//   y=130    First row of peripheral status icons (Vt / LF-AF)
+//   y=170    Second row of peripheral status icons (Cu / CF-??)
+
+static void pdl_draw_diagnostics_page(const PDLInfo *info)
+{
+    char line[48];
+    const int16_t L = 5;
+    const int16_t R = PDL_WIDTH - 5;
+    int16_t y = 5;
+    const int16_t ROW = 22;
+
+    // Battery Voltage | Bus Voltage
+    snprintf(line, sizeof(line), "BattV: %.1fV", info->battery_voltage / 10.0f);
+    pdl_draw_text(L, y, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "BusV: %.1fV", info->motor_bus_voltage);
+    pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+    y += ROW;
+
+    // Battery Current | Bus Current
+    snprintf(line, sizeof(line), "BattI: %.1fA", info->battery_current / 10.0f);
+    pdl_draw_text(L, y, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "BusI: %.1fA", info->motor_bus_current);
+    pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+    y += ROW;
+
+    // Battery Temp | Motor Temp
+    snprintf(line, sizeof(line), "BattT: %d C", info->battery_high_temp);
+    pdl_draw_text(L, y, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "MotorT: %.1f C", info->motor_temp);
+    pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+    y += ROW;
+
+    // Motor Velocity | CCL (only shown when charging)
+    snprintf(line, sizeof(line), "MotorV: %.0f", info->motor_velocity);
+    pdl_draw_text(L, y, MF_ALIGN_LEFT, FNTSMALL, WHITE, line);
+    if (info->bms_relay_state1 & sbit(BmsRelayState1::IsChargingStatus)) {
+        snprintf(line, sizeof(line), "CCL: %dA", info->pack_ccl);
+        pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+    }
+    y += ROW;
+
+    // Precharge status
+    // monitor_status bit 4 is repurposed as "precharge resistor active"
+    bool precharge = (info->monitor_status >> 4) & 1;
+    snprintf(line, sizeof(line), "Prechrg: %s", precharge ? "YES" : "NO");
+    pdl_draw_text(L, y, MF_ALIGN_LEFT, FNTSMALL, precharge ? ILI9341_YELLOW : WHITE, line);
+
+    // Divider between text section and peripheral status section
+    GFX_drawFastHLine(0, 113, PDL_WIDTH, WHITE);
+
+    // Section labels
+    pdl_draw_text(25,  116, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MAIN");
+    pdl_draw_text(160, 116, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MON");
+    pdl_draw_text(295, 116, MF_ALIGN_CENTER, FNTSMALL, WHITE, "AUX");
+
+    // Peripheral status icons
+    // Main LV (left, x=10), Monitor (center, x1=115/x2=205), Aux LV (right, x=310)
+    pdl_draw_battery_stats(MF_ALIGN_LEFT,  10,  130, info->main_status);
+    pdl_draw_monitor_stats(MF_ALIGN_LEFT, MF_ALIGN_RIGHT, 115, 205, 130, info->monitor_status);
+    pdl_draw_battery_stats(MF_ALIGN_RIGHT, 310, 130, info->aux_status);
+}
+
+// ─── Top-level draw ───────────────────────────────────────────────────────────
+
 void pdl_draw(const PDLInfo *info)
 {
     GFX_setClearColor(bgcolor);
     GFX_clearScreen();
-    // GFX_fillRect(0, 0, PDL_WIDTH, PDL_HEIGHT, bgcolor);
 
-    GFX_drawFastVLine(PDL_CENTERPANEL_LEFT, 0, PDL_MAIN_BOTTOM, 0xFFFF);
-    GFX_drawFastVLine(PDL_CENTERPANEL_RIGHT, 0, PDL_MAIN_BOTTOM, 0xFFFF);
-    GFX_drawFastHLine(0, PDL_MAIN_BOTTOM, PDL_WIDTH, 0xFFFF);
+    // Horizontal rule above warning banner
+    GFX_drawFastHLine(0, PDL_MAIN_BOTTOM, PDL_WIDTH, WHITE);
 
-    pdl_draw_text(0, 0, MF_ALIGN_LEFT, FNTSMALL, WHITE, "MAIN");
-    pdl_draw_text(PDL_WIDTH, 0, MF_ALIGN_RIGHT, FNTSMALL, WHITE, "AUX");
+    if (info->show_diagnostics)
+        pdl_draw_diagnostics_page(info);
+    else
+        pdl_draw_main_page(info);
 
-    pdl_draw_text(PDL_WIDTH / 2, -10, MF_ALIGN_CENTER, FNTBIG, WHITE, num_to_str((int)info->vehicle_velocity));
-    pdl_draw_text(PDL_WIDTH / 2, 30, MF_ALIGN_CENTER, FNTSMALL, WHITE, "mph");
-    pdl_draw_text(PDL_WIDTH / 2, 50, MF_ALIGN_CENTER, FNTBIG, WHITE, num_to_str((int)info->motor_bus_current));
-    pdl_draw_text(PDL_WIDTH / 2, 90, MF_ALIGN_CENTER, FNTSMALL, WHITE, "Amps");
-
-    pdl_draw_battery_stats(
-        MF_ALIGN_LEFT, 10, 30, info->main_status);
-    pdl_draw_battery_stats(
-    MF_ALIGN_RIGHT, PDL_WIDTH - 10, 30, info->aux_status);
-    pdl_draw_monitor_stats(MF_ALIGN_LEFT, 
-    MF_ALIGN_RIGHT, 10, PDL_WIDTH - 10, 110, info->monitor_status);
-
+    // Warning banner (same on both pages)
     const char *warning = pdl_get_warning_message(info);
     if (warning != NULL)
     {
