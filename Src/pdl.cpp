@@ -79,7 +79,7 @@ static uint16_t mix_color(uint16_t x, uint16_t y, uint8_t a)
 }
 
 // ─── Warning banner (highest-priority active condition) ───────────────────────
-// Priority order matches the spec: isolation → CAN stale → battery faults →
+// Priority order: isolation → CAN stale → battery faults →
 // motor faults → LV faults → LV warnings.
 
 const char *pdl_get_warning_message(const PDLInfo *info)
@@ -87,8 +87,9 @@ const char *pdl_get_warning_message(const PDLInfo *info)
     using D1  = BmsDtcFlags1;
     using D21 = BmsDtcFlags21;
     using D22 = BmsDtcFlags22;
-    using PM  = PowerDistroMsg::MonitorBit;
-    using PO  = PowerDistroMsg::OutputBit;
+    using DM  = DistroDisplayMain;
+    using DA  = DistroDisplayAux;
+    using DMi = DistroDisplayMisc;
     using ML  = McLimitFlags;
 
     // Isolation fault
@@ -126,16 +127,16 @@ const char *pdl_get_warning_message(const PDLInfo *info)
     // Misc BMS error (remaining DTC flags not covered above)
     {
         const uint8_t misc1  = sbit(D1::ChargerSafetyRelayFault)          |
-                               sbit(D1::InternalHardwareFault)            |
-                               sbit(D1::InternalHeatsinkThermistorFault)  |
-                               sbit(D1::InternalSoftwareFault);           
+                               sbit(D1::InternalHardwareFault)             |
+                               sbit(D1::InternalHeatsinkThermistorFault)   |
+                               sbit(D1::InternalSoftwareFault);
         const uint8_t misc21 = sbit(D21::InternalCommunicationFault)      |
-                               sbit(D21::CellBalancingStuckOffFault)      |
-                               sbit(D21::OpenWiringFault)                 |
-                               sbit(D21::CellAsicFault);                  
+                               sbit(D21::CellBalancingStuckOffFault)       |
+                               sbit(D21::OpenWiringFault)                  |
+                               sbit(D21::CellAsicFault);
         const uint8_t misc22 = sbit(D22::WeakPackFault)                   |
-                               sbit(D22::ExternalCommunicationFault)      |
-                               sbit(D22::RedundantPowerSupplyFault)       |
+                               sbit(D22::ExternalCommunicationFault)       |
+                               sbit(D22::RedundantPowerSupplyFault)        |
                                sbit(D22::InputPowerSupplyFault);
         if ((info->bms_dtc_flags1  & misc1)  ||
             (info->bms_dtc_flags2_1 & misc21) ||
@@ -152,35 +153,35 @@ const char *pdl_get_warning_message(const PDLInfo *info)
     if (info->mc_limit_flags & sbit(ML::IpmMotorTemperature))
         return "Motor Temp Limit";
 
-    // 9. Aux LV fault (hardware or comms)
-    if ((info->monitor_status & mbit(PM::AuxInvalid))     ||
-        (info->monitor_status & mbit(PM::AuxMonitorError)))
+    // Aux LV fault (hardware or comms)
+    if ((info->monitor_status & sbit(DMi::AuxHardwareDetectedFault)) ||
+        (info->monitor_status & sbit(DMi::AuxPowerMonitorI2cError)))
         return "Aux LV Fault";
 
-    // 10. Main LV fault (hardware or comms)
-    if ((info->monitor_status & mbit(PM::DcdcInvalid))       ||
-        (info->monitor_status & mbit(PM::MainMonitorError)))
+    // Main LV fault (hardware or comms)
+    if ((info->monitor_status & sbit(DMi::MainHardwareDetectedFault)) ||
+        (info->monitor_status & sbit(DMi::MainPowerMonitorI2cError)))
         return "Main LV Fault";
 
-    // 11–12. Aux LV over/under voltage and current (errors before warnings)
-    if (info->aux_status & obit(PO::VoltageHighError))  return "Aux LV Overvoltage ERROR";
-    if (info->aux_status & obit(PO::VoltageLowError))   return "Aux LV Undervoltage ERROR";
-    if (info->aux_status & obit(PO::CurrentHighError))  return "Aux LV Overcurrent ERROR";
-    if (info->aux_status & obit(PO::CurrentLowError))   return "Aux LV Undercurrent ERROR";
-    if (info->aux_status & obit(PO::VoltageHighWarn))   return "Aux LV Overvoltage WARN";
-    if (info->aux_status & obit(PO::VoltageLowWarn))    return "Aux LV Undervoltage WARN";
-    if (info->aux_status & obit(PO::CurrentHighWarn))   return "Aux LV Overcurrent WARN";
-    if (info->aux_status & obit(PO::CurrentLowWarn))    return "Aux LV Undercurrent WARN";
+    // Aux LV over/under voltage and current (errors before warnings)
+    if (info->aux_status & sbit(DA::AuxOverVoltageError))    return "Aux LV Overvoltage ERROR";
+    if (info->aux_status & sbit(DA::AuxUnderVoltageError))   return "Aux LV Undervoltage ERROR";
+    if (info->aux_status & sbit(DA::AuxOverCurrentError))    return "Aux LV Overcurrent ERROR";
+    if (info->aux_status & sbit(DA::AuxUnderCurrentError))   return "Aux LV Undercurrent ERROR";
+    if (info->aux_status & sbit(DA::AuxOverVoltageWarning))  return "Aux LV Overvoltage WARN";
+    if (info->aux_status & sbit(DA::AuxUnderVoltageWarning)) return "Aux LV Undervoltage WARN";
+    if (info->aux_status & sbit(DA::AuxOverCurrentWarning))  return "Aux LV Overcurrent WARN";
+    if (info->aux_status & sbit(DA::AuxUnderCurrentWarning)) return "Aux LV Undercurrent WARN";
 
-    // 13–14. Main LV over/under voltage and current (errors before warnings)
-    if (info->main_status & obit(PO::VoltageHighError)) return "Main LV Overvoltage ERROR";
-    if (info->main_status & obit(PO::VoltageLowError))  return "Main LV Undervoltage ERROR";
-    if (info->main_status & obit(PO::CurrentHighError)) return "Main LV Overcurrent ERROR";
-    if (info->main_status & obit(PO::CurrentLowError))  return "Main LV Undercurrent ERROR";
-    if (info->main_status & obit(PO::VoltageHighWarn))  return "Main LV Overvoltage WARN";
-    if (info->main_status & obit(PO::VoltageLowWarn))   return "Main LV Undervoltage WARN";
-    if (info->main_status & obit(PO::CurrentHighWarn))  return "Main LV Overcurrent WARN";
-    if (info->main_status & obit(PO::CurrentLowWarn))   return "Main LV Undercurrent WARN";
+    // Main LV over/under voltage and current (errors before warnings)
+    if (info->main_status & sbit(DM::MainOverVoltageError))    return "Main LV Overvoltage ERROR";
+    if (info->main_status & sbit(DM::MainUnderVoltageError))   return "Main LV Undervoltage ERROR";
+    if (info->main_status & sbit(DM::MainOverCurrentError))    return "Main LV Overcurrent ERROR";
+    if (info->main_status & sbit(DM::MainUnderCurrentError))   return "Main LV Undercurrent ERROR";
+    if (info->main_status & sbit(DM::MainOverVoltageWarning))  return "Main LV Overvoltage WARN";
+    if (info->main_status & sbit(DM::MainUnderVoltageWarning)) return "Main LV Undervoltage WARN";
+    if (info->main_status & sbit(DM::MainOverCurrentWarning))  return "Main LV Overcurrent WARN";
+    if (info->main_status & sbit(DM::MainUnderCurrentWarning)) return "Main LV Undercurrent WARN";
 
     return NULL;
 }
@@ -234,8 +235,8 @@ void pdl_draw_text(int16_t x0, int16_t y0, enum mf_align_t align, FontSize size,
 // ─── LV peripheral status indicators (used on diagnostics page) ──────────────
 
 // align is either left or right
-// if align is left,  then things are drawn to the RIGHT of (x, y)
-// if align is right, then things are drawn to the LEFT  of (x, y)
+// if align is left,  things are drawn to the RIGHT of (x, y)
+// if align is right, things are drawn to the LEFT  of (x, y)
 static void pdl_draw_stat(const char *name, uint16_t color, int16_t x, int16_t y, enum mf_align_t align)
 {
     const int valw = 15;
@@ -249,23 +250,34 @@ static void pdl_draw_stat(const char *name, uint16_t color, int16_t x, int16_t y
     pdl_draw_text(textx, y, align, FNTSMALL, WHITE, name);
 }
 
-static void pdl_draw_battery_stats(
-    enum mf_align_t align, int16_t x, int16_t y, uint8_t data)
+// ByteEnum must be DistroDisplayMain (paired with info->main_status) or
+// DistroDisplayAux (paired with info->aux_status). Both bytes share identical
+// bit positions; the template parameter ties each call site to the correct byte.
+template<typename ByteEnum>
+static void pdl_draw_battery_stats(mf_align_t align, int16_t x, int16_t y, uint8_t data)
 {
-    warningSeverity voltage;
-    warningSeverity current;
-    using PU = PowerDistroMsg::OutputBit;
-    if (obit(PU::VoltageHighError) & data) {voltage = ERRORHIGH;}
-    else if (obit(PU::VoltageLowError) & data) {voltage = ERRORLOW;}
-    else if (obit(PU::VoltageHighWarn) & data) {voltage = WARNINGHIGH;}
-    else if (obit(PU::VoltageLowWarn) & data) {voltage = WARNINGLOW;}
-    else {voltage = GOOD;};
+    static_assert(
+        std::is_same_v<ByteEnum, DistroDisplayMain> ||
+        std::is_same_v<ByteEnum, DistroDisplayAux>,
+        "ByteEnum must be DistroDisplayMain or DistroDisplayAux"
+    );
 
-    if (obit(PU::CurrentHighError) & data) {current = ERRORHIGH;}
-    else if (obit(PU::CurrentLowError) & data) {current = ERRORLOW;}
-    else if (obit(PU::CurrentHighWarn) & data) {current = WARNINGHIGH;}
-    else if (obit(PU::CurrentLowWarn) & data) {current = WARNINGLOW;}
-    else {current = GOOD;};
+    // DistroDisplayMain and DistroDisplayAux encode V/I severity at identical
+    // bit positions. DistroDisplayMain's names are used as the canonical reference.
+    using DM = DistroDisplayMain;
+    warningSeverity voltage, current;
+
+    if      (data & sbit(DM::MainOverVoltageError))    voltage = ERRORHIGH;
+    else if (data & sbit(DM::MainUnderVoltageError))   voltage = ERRORLOW;
+    else if (data & sbit(DM::MainOverVoltageWarning))  voltage = WARNINGHIGH;
+    else if (data & sbit(DM::MainUnderVoltageWarning)) voltage = WARNINGLOW;
+    else                                               voltage = GOOD;
+
+    if      (data & sbit(DM::MainOverCurrentError))    current = ERRORHIGH;
+    else if (data & sbit(DM::MainUnderCurrentError))   current = ERRORLOW;
+    else if (data & sbit(DM::MainOverCurrentWarning))  current = WARNINGHIGH;
+    else if (data & sbit(DM::MainUnderCurrentWarning)) current = WARNINGLOW;
+    else                                               current = GOOD;
 
     pdl_draw_stat("Vt", get_color_bat(voltage), x, y, align);
     y += 40;
@@ -273,19 +285,20 @@ static void pdl_draw_battery_stats(
 }
 
 static void pdl_draw_monitor_stats(
-    enum mf_align_t align1, enum mf_align_t align2, int16_t x1, int16_t x2, int16_t y, uint8_t data)
+    mf_align_t align1, mf_align_t align2, int16_t x1, int16_t x2, int16_t y, uint8_t data)
 {
-    using PM = PowerDistroMsg::MonitorBit;
-    uint16_t dcdcFault = (data & mbit(PM::DcdcInvalid)) ? ILI9341_ORANGE : ILI9341_GREEN;
-    uint16_t auxFault = (data & mbit(PM::AuxInvalid)) ? ILI9341_ORANGE : ILI9341_GREEN;
-    uint16_t commsFault = (data & (mbit(PM::MainMonitorError) | mbit(PM::AuxMonitorError))) ? ILI9341_ORANGE : ILI9341_GREEN;
-    uint16_t debugFault = ILI9341_GREEN;
+    using DMi = DistroDisplayMisc;
+    uint16_t mainHwFault = (data & sbit(DMi::MainHardwareDetectedFault)) ? ILI9341_ORANGE : ILI9341_GREEN;
+    uint16_t auxHwFault  = (data & sbit(DMi::AuxHardwareDetectedFault))  ? ILI9341_ORANGE : ILI9341_GREEN;
+    uint16_t commsFault  = (data & (sbit(DMi::MainPowerMonitorI2cError) |
+                                    sbit(DMi::AuxPowerMonitorI2cError))) ? ILI9341_ORANGE : ILI9341_GREEN;
+    uint16_t debugFault  = ILI9341_GREEN;
 
-    pdl_draw_stat("LF", dcdcFault, x1, y, align1);
-    pdl_draw_stat("AF", auxFault, x2, y, align2);
+    pdl_draw_stat("LF", mainHwFault, x1, y, align1);
+    pdl_draw_stat("AF", auxHwFault,  x2, y, align2);
     y += 40;
-    pdl_draw_stat("CF", commsFault, x1, y, align1);
-    pdl_draw_stat("??", debugFault, x2, y, align2);
+    pdl_draw_stat("CF", commsFault,  x1, y, align1);
+    pdl_draw_stat("??", debugFault,  x2, y, align2);
 }
 
 // ─── Page-specific helpers ────────────────────────────────────────────────────
@@ -295,16 +308,16 @@ static const char *pdl_get_vehicle_state(const PDLInfo *info)
     if (info->bms_safety_stale || info->power_distro_stale) return "---";
 
     using RS1 = BmsRelayState1;
-    using PM  = PowerDistroMsg::MonitorBit;
+    using DMi = DistroDisplayMisc;
 
-    const uint8_t monitor_fault_mask = mbit(PM::DcdcInvalid)     |
-                                       mbit(PM::AuxInvalid)       |
-                                       mbit(PM::MainMonitorError) |
-                                       mbit(PM::AuxMonitorError);
+    const uint8_t monitor_fault_mask = sbit(DMi::MainHardwareDetectedFault) |
+                                       sbit(DMi::AuxHardwareDetectedFault)  |
+                                       sbit(DMi::MainPowerMonitorI2cError)  |
+                                       sbit(DMi::AuxPowerMonitorI2cError);
 
     bool discharge_enabled = (info->bms_relay_state1 & sbit(RS1::DischargeRelayEnabled)) != 0;
     bool monitor_fault     = (info->monitor_status & monitor_fault_mask) != 0;
-    // monitor_status bit 4 is repurposed as precharge resistor active
+    // monitor_status bit 4 (PowerDistroWatchdog) is repurposed as precharge resistor active
     bool precharge_active  = (info->monitor_status >> 4) & 1;
 
     if (monitor_fault || !discharge_enabled)
@@ -417,8 +430,7 @@ static void pdl_draw_diagnostics_page(const PDLInfo *info)
     }
     y += ROW;
 
-    // Precharge status
-    // monitor_status bit 4 is repurposed as "precharge resistor active"
+    // Precharge status (monitor_status bit 4 repurposed as precharge resistor active)
     bool precharge = (info->monitor_status >> 4) & 1;
     snprintf(line, sizeof(line), "Prechrg: %s", precharge ? "YES" : "NO");
     pdl_draw_text(L, y, MF_ALIGN_LEFT, FNTSMALL, precharge ? ILI9341_YELLOW : WHITE, line);
@@ -433,9 +445,9 @@ static void pdl_draw_diagnostics_page(const PDLInfo *info)
 
     // Peripheral status icons
     // Main LV (left, x=10), Monitor (center, x1=115/x2=205), Aux LV (right, x=310)
-    pdl_draw_battery_stats(MF_ALIGN_LEFT,  10,  130, info->main_status);
+    pdl_draw_battery_stats<DistroDisplayMain>(MF_ALIGN_LEFT,  10,  130, info->main_status);
     pdl_draw_monitor_stats(MF_ALIGN_LEFT, MF_ALIGN_RIGHT, 115, 205, 130, info->monitor_status);
-    pdl_draw_battery_stats(MF_ALIGN_RIGHT, 310, 130, info->aux_status);
+    pdl_draw_battery_stats<DistroDisplayAux> (MF_ALIGN_RIGHT, 310, 130, info->aux_status);
 }
 
 // ─── Top-level draw ───────────────────────────────────────────────────────────
