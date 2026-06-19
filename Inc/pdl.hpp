@@ -2,7 +2,11 @@
 #define PDL_H
 
 #include "mcufont.h"
+#ifdef SIMULATION
+#include "picosdk_sim.h"
+#else
 #include "hardware/spi.h"
+#endif
 
 /*
 Outdated sry
@@ -31,6 +35,10 @@ Outdated sry
 
 |--40--|----------------------------280------------------------------|
 */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void pdl_init(spi_inst_t *spi, uint dc, uint cs, uint rst, uint sck, uint mosi);
 
 
@@ -103,5 +111,9 @@ typedef struct PDLInfo
 #define PDL_MAIN_BOTTOM (PDL_HEIGHT - PDL_WARNING_HEIGHT)
 
 void pdl_draw(const PDLInfo *info);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // !PDL_H

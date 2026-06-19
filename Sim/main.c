@@ -1,12 +1,9 @@
 #include "ili9341.h"
 #include "gfx.h"
-
 #include "fonts.h"
 #include "mcufont.h"
 #include "icons.h"
-#include "pdl.h"
-
-// #include "psrcar.h"
+#include "pdl.hpp"
 
 #ifdef SIMULATION
 #include "picosdk_sim.h"
@@ -19,99 +16,79 @@
 #endif
 
 #include <stdio.h>
-// #include <sys/stdio.h>
 
-bool periodic(double offset, double frequency) {
+/* Returns true for roughly half each period, creating a square wave.
+   Used to drive time-varying demo values. */
+static bool periodic(double offset, double frequency) {
     double time = GetTime() + offset;
     return fmod(time * frequency, 1.0) < 0.5;
 }
 
-PDLInfo get_info() {
-    PDLInfo info = {
-        .motor_velocity = 50,
-        .motor_current = 700,
+/* Build a plausible PDLInfo for the visual demo.
+   Values change over time so both display pages can be exercised. */
+static PDLInfo get_info(void) {
+    PDLInfo info = {0};
+    double t = GetTime();
 
-        .main_over_voltage = periodic(0.0, 1.0),
-        .main_under_voltage = 0,
-        .main_over_current = 0,
-        .main_current_warning = 1,
+    /* BMS Safety Critical (0x200)
+       bit 0 = DischargeRelayEnabled, bit 6 = IsReadyStatus */
+    info.bms_relay_state1 = (1u << 0) | (1u << 6);
+    info.battery_soc      = 85;
 
-        .aux_over_voltage = !periodic(4.926, 0.3958),
-        .aux_under_voltage = 1,
-        .aux_over_current = periodic(0.5, 3.14159),
-        .aux_current_warning = 1,
-    };
+    /* BMS Pack Voltage and Energy (0x201) — raw BMS scaling */
+    info.battery_voltage  = 1200;   /* /10.0f → 120.0 V */
+    info.battery_current  = (uint16_t)(500 + 80 * sin(t * 0.4));  /* /10.0f → ~50 A */
+    info.battery_power_kw = (uint16_t)(600 + 80 * sin(t * 0.4));  /* /100.0f → ~6.0 kW */
+
+    /* BMS Temperature / Current Limits / Power (0x202) */
+    info.pack_dcl          = 120;   /* 120 A discharge limit */
+    info.pack_ccl          = 40;    /* 40 A charge limit */
+    info.battery_high_temp = 35;    /* 35 °C */
+
+    /* Power Distro Display (0x300) — all clear */
+    info.monitor_status = 0;
+    info.main_status    = 0;
+    info.aux_status     = 0;
+
+    /* Motor Controller (0x402, 0x403, 0x40B) */
+    info.motor_bus_voltage = 118.5f;
+    info.motor_bus_current = (float)(50.0 + 8.0 * sin(t * 0.4));
+    info.vehicle_velocity  = (float)(25.0 + 5.0 * sin(t * 0.15));
+    info.motor_velocity    = (float)(3200.0 + 600.0 * sin(t * 0.15));
+    info.motor_temp        = 45.0f;
+    info.heat_sink_temp    = 55.0f;
+
+    /* Demonstrate a periodic CAN-stale warning (stale for ~10 s every 20 s) */
+    info.mc_speed_stale = periodic(0.0, 0.05);
+
+    /* Alternate pages every 8 seconds so both are visible in the demo */
+    info.show_diagnostics = (fmod(t, 16.0) >= 8.0);
+
     return info;
 }
 
-static void pixel_cb(int16_t x, int16_t y, uint8_t count, uint8_t alpha, void* state) {
-    GFX_drawFastHLine(x, y, count, GFX_RGB565(alpha, alpha, alpha));
-}
-
-static uint8_t char_cb(int16_t x0, int16_t y0, mf_char character, void* state) {
-    return mf_render_character(&mf_bwfont_Roboto_Regular20bw.font, x0, y0, character, pixel_cb, state);
-}
-
-int main() {
+int main(void) {
     stdio_init_all();
-
-    bool led_on = true;
-
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-    gpio_put(PICO_DEFAULT_LED_PIN, led_on);
-
-    gpio_init(22);
-    gpio_set_dir(22, GPIO_OUT);
-    gpio_put(22, led_on);
 
     LCD_setPins(20, 17, 21, 18, 19);
     LCD_setSPIperiph(spi0);
     LCD_initDisplay();
     LCD_setRotation(1);
-
     GFX_createFramebuf();
-
 
 #ifdef SIMULATION
     LCDSim_InitWindow();
 
     while (!LCDSim_WindowShouldClose())
 #else
-    while (true)
+    while (1)
 #endif
     {
-        // GFX_setClearColor(ILI9341_BLACK);
-        // GFX_clearScreen();
-
-        // GFX_setCursor(0, 0);
-        // GFX_setTextColor(ILI9341_GREEN);
-        // GFX_setTextBack(ILI9341_GREEN);
-        // GFX_printf("I am the built-in font from the ILI9341 Library!");
-
-        // mf_render_aligned(&mf_bwfont_Roboto_Regular20bw.font, GFX_getWidth() / 2, GFX_getHeight() / 2, MF_ALIGN_RIGHT, "I am MCUFont.", 0, char_cb, NULL);
-        // int q = 0;
-        // for (int y = 0; y < 200; y++) {
-        //     for (int x = 0; x < 200; x++) {
-        //         LCD_WritePixel(x, y, ILI9341_GREEN);
-        //         printf("%d\n", q++);
-        //     }
-        // }
-
-        // gpio_put(PICO_DEFAULT_LED_PIN, led_on);
-        // gpio_put(22, led_on);
-        // led_on = !led_on;
-        // sleep_ms(500);
-
-        // GFX_setTextColor(ILI9341_WHITE);
-        // GFX_DrawIcon(warning_icon, 0, 100, warning_icon_width, warning_icon_height, 0xFFFF);
-
         PDLInfo info = get_info();
-        pdl_draw(&info);
+        pdl_draw(&info);  /* renders and flushes the framebuffer */
 
-        GFX_Update();
 #ifdef SIMULATION
-        LCDSim_Redraw();
+        LCDSim_Redraw();  /* blit framebuffer → raylib window */
 #endif
     }
 
@@ -120,4 +97,6 @@ int main() {
 #ifdef SIMULATION
     LCDSim_CloseWindow();
 #endif
+
+    return 0;
 }

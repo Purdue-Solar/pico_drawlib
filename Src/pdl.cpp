@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <type_traits>
 #include "pdl.hpp"
 #include "artemis_canid.hpp"
 
@@ -298,7 +299,7 @@ static void pdl_draw_monitor_stats(
     pdl_draw_stat("AF", auxHwFault,  x2, y, align2);
     y += 40;
     pdl_draw_stat("CF", commsFault,  x1, y, align1);
-    pdl_draw_stat("??", debugFault,  x2, y, align2);
+    pdl_draw_stat("DF", debugFault,  x2, y, align2);
 }
 
 // ─── Page-specific helpers ────────────────────────────────────────────────────
@@ -321,12 +322,34 @@ static const char *pdl_get_vehicle_state(const PDLInfo *info)
     bool precharge_active  = (info->monitor_status >> 4) & 1;
 
     if (monitor_fault || !discharge_enabled)
-        return "FAULT";
+        return "Fault";
 
     if (precharge_active)
-        return "PRECHARGE";
+        return "Precharge";
 
-    return "RUNNING";
+    return "Running";
+}
+
+static const char *pdl_get_current_state(const PDLInfo *info)
+{
+    if (info->mc_errors_stale) return "---";
+
+    using MC = McLimitFlags;
+
+    if (info -> mc_limit_flags & sbit(MC::IpmMotorTemperature)) {
+        return "Temp";
+    } else if (info -> mc_limit_flags & sbit(MC::BusVoltageUpperLimit)) {
+        return "VHigh";
+    } else if (info -> mc_limit_flags & sbit(MC::BusVoltageLowerLimit)) {
+        return "VLow";
+    } else if (info -> mc_limit_flags & sbit(MC::BusCurrent)) {
+        return "BusI";
+    } else if (info -> mc_limit_flags & sbit(MC::Velocity)) {
+        return "Velocity";
+    } else if (info -> mc_limit_flags & sbit(MC::OutputVoltagePwm)) {
+        return "PWM";
+    } 
+    return "All good";
 }
 
 static int pdl_count_warnings(const PDLInfo *info)
@@ -358,23 +381,23 @@ static void pdl_draw_main_page(const PDLInfo *info)
     const int16_t L = 5;
     const int16_t R = PDL_WIDTH - 5;
 
-    // SOC | Pack Power
-    snprintf(line, sizeof(line), "SOC: %d%%", info->battery_soc);
-    pdl_draw_text(L, 68, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
-    snprintf(line, sizeof(line), "Pwr: %.1f kW", info->battery_power_kw / 100.0f);
+    // Bus Current | Heatsink temp
+    snprintf(line, sizeof(line), "BusI: %.1fA", info->motor_bus_current);
+    pdl_draw_text(L, 68, MF_ALIGN_LEFT, FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "HSTemp: %.0f C", info->heat_sink_temp);
     pdl_draw_text(R, 68, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
 
-    // DCL | Current limit status (lowest 8 bits of MC status word)
-    snprintf(line, sizeof(line), "DCL: %dA", info->pack_dcl);
+    // DCL | SOC
+    snprintf(line, sizeof(line), "MaxBusI: %dA", info->pack_dcl);
     pdl_draw_text(L, 94, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
-    snprintf(line, sizeof(line), "CLim: 0x%02X", info->mc_limit_flags);
-    pdl_draw_text(R, 94, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "SOC: %d%%", info->battery_soc);
+    pdl_draw_text(R, 94, MF_ALIGN_RIGHT,  FNTSMALL, WHITE, line);
 
-    // Vehicle state | Heatsink temp
-    snprintf(line, sizeof(line), "St: %s", pdl_get_vehicle_state(info));
-    pdl_draw_text(L, 120, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
-    snprintf(line, sizeof(line), "HS: %.0f C", info->heat_sink_temp);
-    pdl_draw_text(R, 120, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
+    // Current limit status | Vehicle state
+    snprintf(line, sizeof(line), "ILimit: %s", pdl_get_current_state(info));
+    pdl_draw_text(L, 120, MF_ALIGN_LEFT, FNTSMALL, WHITE, line);
+    snprintf(line, sizeof(line), "Mode: %s", pdl_get_vehicle_state(info));
+    pdl_draw_text(R, 120, MF_ALIGN_RIGHT,  FNTSMALL, WHITE, line);
 
     // Warning/Error count
     int wcount = pdl_count_warnings(info);
@@ -410,7 +433,7 @@ static void pdl_draw_diagnostics_page(const PDLInfo *info)
     // Battery Current | Bus Current
     snprintf(line, sizeof(line), "BattI: %.1fA", info->battery_current / 10.0f);
     pdl_draw_text(L, y, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
-    snprintf(line, sizeof(line), "BusI: %.1fA", info->motor_bus_current);
+    snprintf(line, sizeof(line), "BatPwr: %.1f kW", info->battery_power_kw / 100.0f);
     pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
     y += ROW;
 
@@ -424,24 +447,17 @@ static void pdl_draw_diagnostics_page(const PDLInfo *info)
     // Motor Velocity | CCL (only shown when charging)
     snprintf(line, sizeof(line), "MotorV: %.0f", info->motor_velocity);
     pdl_draw_text(L, y, MF_ALIGN_LEFT, FNTSMALL, WHITE, line);
-    if (info->bms_relay_state1 & sbit(BmsRelayState1::IsChargingStatus)) {
-        snprintf(line, sizeof(line), "CCL: %dA", info->pack_ccl);
-        pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
-    }
+    snprintf(line, sizeof(line), "CCL: %dA", info->pack_ccl);
+    pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
     y += ROW;
 
-    // Precharge status (monitor_status bit 4 repurposed as precharge resistor active)
-    bool precharge = (info->monitor_status >> 4) & 1;
-    snprintf(line, sizeof(line), "Prechrg: %s", precharge ? "YES" : "NO");
-    pdl_draw_text(L, y, MF_ALIGN_LEFT, FNTSMALL, precharge ? ILI9341_YELLOW : WHITE, line);
-
     // Divider between text section and peripheral status section
-    GFX_drawFastHLine(0, 113, PDL_WIDTH, WHITE);
+    GFX_drawFastHLine(0, 103, PDL_WIDTH, WHITE);
 
     // Section labels
-    pdl_draw_text(25,  116, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MAIN");
-    pdl_draw_text(160, 116, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MON");
-    pdl_draw_text(295, 116, MF_ALIGN_CENTER, FNTSMALL, WHITE, "AUX");
+    pdl_draw_text(25,  106, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MAIN");
+    pdl_draw_text(160, 106, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MON");
+    pdl_draw_text(295, 106, MF_ALIGN_CENTER, FNTSMALL, WHITE, "AUX");
 
     // Peripheral status icons
     // Main LV (left, x=10), Monitor (center, x1=115/x2=205), Aux LV (right, x=310)
