@@ -293,9 +293,9 @@ static void pdl_draw_monitor_stats(
     uint16_t auxHwFault  = (data & sbit(DMi::AuxHardwareDetectedFault))  ? ILI9341_ORANGE : ILI9341_GREEN;
     uint16_t commsFault  = (data & (sbit(DMi::MainPowerMonitorI2cError) |
                                     sbit(DMi::AuxPowerMonitorI2cError))) ? ILI9341_ORANGE : ILI9341_GREEN;
-    uint16_t debugFault  = ILI9341_GREEN;
+    uint16_t debugFault  = ILI9341_GREEN; 
 
-    pdl_draw_stat("LF", mainHwFault, x1, y, align1);
+    pdl_draw_stat("MF", mainHwFault, x1, y, align1);
     pdl_draw_stat("AF", auxHwFault,  x2, y, align2);
     y += 40;
     pdl_draw_stat("CF", commsFault,  x1, y, align1);
@@ -358,7 +358,15 @@ static int pdl_count_warnings(const PDLInfo *info)
          + __builtin_popcount(info->bms_dtc_flags2_1)
          + __builtin_popcount(info->bms_dtc_flags2_2)
          + __builtin_popcount(info->mc_error_flags1)
-         + __builtin_popcount(info->mc_error_flags2);
+         + __builtin_popcount(info->mc_error_flags2)
+         + (info->bms_safety_stale == true)
+         + (info->bms_voltage_stale == true) 
+         + (info->bms_power_stale == true) 
+         + (info->mc_errors_stale == true) 
+         + (info->mc_bus_stale == true) 
+         + (info->mc_speed_stale == true) 
+         + (info->mc_temp_stale == true)   
+         + (info->power_distro_stale == true);
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -456,13 +464,13 @@ static void pdl_draw_diagnostics_page(const PDLInfo *info)
 
     // Section labels
     pdl_draw_text(25,  106, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MAIN");
-    pdl_draw_text(160, 106, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MON");
+    pdl_draw_text(160, 106, MF_ALIGN_CENTER, FNTSMALL, WHITE, "MONITOR");
     pdl_draw_text(295, 106, MF_ALIGN_CENTER, FNTSMALL, WHITE, "AUX");
 
     // Peripheral status icons
     // Main LV (left, x=10), Monitor (center, x1=115/x2=205), Aux LV (right, x=310)
     pdl_draw_battery_stats<DistroDisplayMain>(MF_ALIGN_LEFT,  10,  130, info->main_status);
-    pdl_draw_monitor_stats(MF_ALIGN_LEFT, MF_ALIGN_RIGHT, 115, 205, 130, info->monitor_status);
+    pdl_draw_monitor_stats(MF_ALIGN_LEFT, MF_ALIGN_RIGHT, 105, 215, 130, info->monitor_status);
     pdl_draw_battery_stats<DistroDisplayAux> (MF_ALIGN_RIGHT, 310, 130, info->aux_status);
 }
 
