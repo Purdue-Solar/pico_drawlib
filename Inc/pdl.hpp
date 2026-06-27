@@ -98,7 +98,11 @@ typedef struct PDLInfo
     bool mc_temp_stale;
 
     // ── UI state ─────────────────────────────────────────────────────
-    bool show_diagnostics;  // toggled by button press; selects diagnostics page over main page
+    bool show_diagnostics;   // toggled by button press; selects diagnostics page over main page
+
+    // ── Power hold ───────────────────────────────────────────────────
+    bool    power_hold_enabled; // true when power hold is active
+    uint8_t power_hold_amps;    // current setpoint (10–28 A)
 } PDLInfo;
 
 #define PDL_WIDTH 320

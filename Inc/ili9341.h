@@ -109,10 +109,16 @@ extern "C"
 #endif
 
 #ifdef SIMULATION
+#ifdef __cplusplus
+extern "C" {
+#endif
 void LCDSim_InitWindow(void);
 int LCDSim_WindowShouldClose(void);
 void LCDSim_CloseWindow(void);
 void LCDSim_Redraw(void);
+#ifdef __cplusplus
+}
+#endif
 #endif
 
 #endif

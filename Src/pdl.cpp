@@ -3,6 +3,13 @@
 #include "pdl.hpp"
 #include "artemis_canid.hpp"
 
+#ifndef SIMULATION
+extern "C" 
+{
+#include "pico/time.h"
+}
+#endif
+
 extern "C"
 {
 #include "fonts.h"
@@ -11,10 +18,8 @@ extern "C"
 #include "icons.h"
 }
 
-
 #define WHITE 0xFFFF
-
-uint16_t bgcolor = ILI9341_CASET;
+uint16_t bgcolor = ILI9341_CASET; // Note: you usually use colors like ILI9341_BLUE for this, but ILI9341_CASET just happened to create the perfect color
 
 enum warningSeverity
 {
@@ -57,8 +62,6 @@ const char *num_to_str(int num)
     return buf;
 }
 
-// mix_color(x, y, 0) == x
-// mix_color(x, y, 255) == y
 static uint16_t mix_color(uint16_t x, uint16_t y, uint8_t a)
 {
     uint16_t xr = x >> 11;
@@ -82,6 +85,8 @@ static uint16_t mix_color(uint16_t x, uint16_t y, uint8_t a)
 // ─── Warning banner (highest-priority active condition) ───────────────────────
 // Priority order: isolation → CAN stale → battery faults →
 // motor faults → LV faults → LV warnings.
+// Note that this is distinct from the highest priority
+// items with a red/yellow banner
 
 const char *pdl_get_warning_message(const PDLInfo *info)
 {
@@ -149,7 +154,6 @@ const char *pdl_get_warning_message(const PDLInfo *info)
     if (info->mc_error_flags1 || info->mc_error_flags2)
         return "Motor Controller Fault";
 
-    // BENFIX
     // Motor temp error (IPM/motor temperature limit active)
     if (info->mc_limit_flags & sbit(ML::IpmMotorTemperature))
         return "Motor Temp Limit";
@@ -194,6 +198,7 @@ typedef enum FontSize
     FNTBIG,
     FNTSMALL,
 } FontSize;
+
 typedef struct FontState
 {
     const struct mf_font_s *font;
@@ -392,7 +397,7 @@ static void pdl_draw_main_page(const PDLInfo *info)
     // Bus Current | Heatsink temp
     snprintf(line, sizeof(line), "BusI: %.1fA", info->motor_bus_current);
     pdl_draw_text(L, 68, MF_ALIGN_LEFT, FNTSMALL, WHITE, line);
-    snprintf(line, sizeof(line), "HSTemp: %.0f C", info->heat_sink_temp);
+    snprintf(line, sizeof(line), "HSTemp: %.0fC", info->heat_sink_temp);
     pdl_draw_text(R, 68, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
 
     // DCL | SOC
@@ -412,6 +417,12 @@ static void pdl_draw_main_page(const PDLInfo *info)
     uint16_t wcolor = (wcount > 0) ? ILI9341_YELLOW : WHITE;
     snprintf(line, sizeof(line), "Warnings/Errors: %d", wcount);
     pdl_draw_text(PDL_WIDTH / 2, 152, MF_ALIGN_CENTER, FNTSMALL, wcolor, line);
+
+    // Power hold indicator — shown when active, centered near the bottom of the content area
+    if (info->power_hold_enabled) {
+        snprintf(line, sizeof(line), "Power Hold: %dA", info->power_hold_amps);
+        pdl_draw_text(PDL_WIDTH / 2, 174, MF_ALIGN_CENTER, FNTSMALL, ILI9341_CYAN, line);
+    }
 }
 
 // ─── Diagnostics page ────────────────────────────────────────────────────────
@@ -441,19 +452,19 @@ static void pdl_draw_diagnostics_page(const PDLInfo *info)
     // Battery Current | Bus Current
     snprintf(line, sizeof(line), "BattI: %.1fA", info->battery_current / 10.0f);
     pdl_draw_text(L, y, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
-    snprintf(line, sizeof(line), "BatPwr: %.1f kW", info->battery_power_kw / 100.0f);
+    snprintf(line, sizeof(line), "BatPwr: %.1fkW", info->battery_power_kw / 100.0f);
     pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
     y += ROW;
 
     // Battery Temp | Motor Temp
-    snprintf(line, sizeof(line), "BattT: %d C", info->battery_high_temp);
+    snprintf(line, sizeof(line), "BattT: %dC", info->battery_high_temp);
     pdl_draw_text(L, y, MF_ALIGN_LEFT,  FNTSMALL, WHITE, line);
-    snprintf(line, sizeof(line), "MotorT: %.1f C", info->motor_temp);
+    snprintf(line, sizeof(line), "MotorT: %.1fC", info->motor_temp);
     pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
     y += ROW;
 
     // Motor Velocity | CCL (only shown when charging)
-    snprintf(line, sizeof(line), "MotorV: %.0f", info->motor_velocity);
+    snprintf(line, sizeof(line), "MotorV: %.0fV", info->motor_velocity);
     pdl_draw_text(L, y, MF_ALIGN_LEFT, FNTSMALL, WHITE, line);
     snprintf(line, sizeof(line), "CCL: %dA", info->pack_ccl);
     pdl_draw_text(R, y, MF_ALIGN_RIGHT, FNTSMALL, WHITE, line);
@@ -474,6 +485,205 @@ static void pdl_draw_diagnostics_page(const PDLInfo *info)
     pdl_draw_battery_stats<DistroDisplayAux> (MF_ALIGN_RIGHT, 310, 130, info->aux_status);
 }
 
+// ─── Critical fault detection and overlay ─────────────────────────────────────
+// Priority: Isolation > Contactor > BMS Non-Operational > Aux Battery
+
+enum class CriticalFault : uint8_t
+{
+    None       = 0,
+    Isolation,
+    Contactor,
+    BmsNonOp,
+    AuxBattery,
+};
+
+#ifdef SIMULATION
+static uint32_t pdl_get_time_ms()
+{
+    static uint32_t t = 0;
+    return t += 16;
+}
+#else
+static uint32_t pdl_get_time_ms()
+{
+    return to_ms_since_boot(get_absolute_time());
+}
+#endif
+
+static bool     s_contactor_timer_running = false;
+static uint32_t s_contactor_open_since_ms = 0;
+
+// Returns true when we have reliable evidence the contactors are open.
+// Staleness-guarded so zero-initialised fields don't cause a false alarm at boot.
+static bool pdl_contactor_is_open(const PDLInfo *info)
+{
+    using RS1 = BmsRelayState1;
+    using DM  = DistroDisplayMain;
+    using DA  = DistroDisplayAux;
+    using DMi = DistroDisplayMisc;
+
+    bool bms_open = !info->bms_safety_stale &&
+                    !(info->bms_relay_state1 & sbit(RS1::DischargeRelayEnabled));
+
+    const uint8_t main_err = sbit(DM::MainOverVoltageError)      |
+                             sbit(DM::MainUnderVoltageError)      |
+                             sbit(DM::MainOverCurrentError)       |
+                             sbit(DM::MainUnderCurrentError);
+    const uint8_t aux_err  = sbit(DA::AuxOverVoltageError)       |
+                             sbit(DA::AuxUnderVoltageError)       |
+                             sbit(DA::AuxOverCurrentError)        |
+                             sbit(DA::AuxUnderCurrentError);
+    const uint8_t mon_err  = sbit(DMi::MainHardwareDetectedFault) |
+                             sbit(DMi::AuxHardwareDetectedFault)  |
+                             sbit(DMi::MainPowerMonitorI2cError)  |
+                             sbit(DMi::AuxPowerMonitorI2cError);
+
+    bool distro_fault = !info->power_distro_stale &&
+                        ((info->main_status    & main_err) ||
+                         (info->aux_status     & aux_err)  ||
+                         (info->monitor_status & mon_err));
+
+    return bms_open || distro_fault;
+}
+
+static CriticalFault pdl_get_critical_fault(const PDLInfo *info)
+{
+    using D1  = BmsDtcFlags1;
+    using D21 = BmsDtcFlags21;
+    using D22 = BmsDtcFlags22;
+    using DA  = DistroDisplayAux;
+    using DMi = DistroDisplayMisc;
+
+    // 1. Contactor fault — triggers 250 ms after contactors open with HV still present
+    // Note that this check is only possible when there is a prexisting fault
+    {
+        bool hv_present = !info->mc_bus_stale &&
+                          (info->motor_bus_voltage > 10.0f);
+        bool open = pdl_contactor_is_open(info);
+
+        if (open && hv_present) {
+            uint32_t now = pdl_get_time_ms();
+            if (!s_contactor_timer_running) {
+                s_contactor_open_since_ms = now;
+                s_contactor_timer_running = true;
+            } else if (now - s_contactor_open_since_ms >= 250u) {
+                return CriticalFault::Contactor;
+            }
+        } else {
+            s_contactor_timer_running = false;
+        }
+    }
+
+    // 2. Isolation fault
+    if (info->bms_dtc_flags2_2 & sbit(D22::HighVoltageIsolationFault))
+        return CriticalFault::Isolation;
+
+    // 3. BMS non-operational (OBD-II codes P0A07, P0A09, P0A0B, P0A1F, P0A04, P0AC0, P0A0F, P0560, P0A05)
+    {
+        const uint8_t nonop1  = sbit(D1::DischargeLimitEnforcementFault) |  // P0A07
+                                sbit(D1::InternalHardwareFault)           |  // P0A09
+                                sbit(D1::InternalSoftwareFault);             // P0A0B
+        const uint8_t nonop21 = sbit(D21::InternalCommunicationFault)    |  // P0A1F
+                                sbit(D21::OpenWiringFault)                |  // P0A04
+                                sbit(D21::CurrentSensorFault)             |  // P0AC0
+                                sbit(D21::CellAsicFault);                    // P0A0F
+        const uint8_t nonop22 = sbit(D22::RedundantPowerSupplyFault)     |  // P0560
+                                sbit(D22::InputPowerSupplyFault);            // P0A05
+        if ((info->bms_dtc_flags1   & nonop1)  ||
+            (info->bms_dtc_flags2_1 & nonop21) ||
+            (info->bms_dtc_flags2_2 & nonop22))
+            return CriticalFault::BmsNonOp;
+    }
+
+    // 4. Aux battery fault — any aux error or aux hardware/comms fault
+    {
+        const uint8_t aux_err = sbit(DA::AuxOverVoltageError)   |
+                                sbit(DA::AuxUnderVoltageError)   |
+                                sbit(DA::AuxOverCurrentError)    |
+                                sbit(DA::AuxUnderCurrentError);
+        bool aux_errors   = (info->aux_status & aux_err) != 0;
+        bool aux_hw_fault = (info->monitor_status &
+                             (sbit(DMi::AuxHardwareDetectedFault) |
+                              sbit(DMi::AuxPowerMonitorI2cError))) != 0;
+        if (aux_errors || aux_hw_fault)
+            return CriticalFault::AuxBattery;
+    }
+
+    return CriticalFault::None;
+}
+
+static constexpr int overlayMainY = 75;
+static constexpr int overlayMainH = 75;
+static constexpr int overlayDiagY = 0;
+static constexpr int overlayDiagH = 104;
+
+static CriticalFault s_latched_fault = CriticalFault::None;
+
+// is_active=true  → fault currently present:     red   overlay, 2-line layout.
+// is_active=false → fault cleared but latched:   yellow overlay, 3-line layout + "LATCHED".
+static void pdl_draw_critical_overlay(CriticalFault fault, bool show_diagnostics, bool is_active)
+{
+    int16_t oy = show_diagnostics ? overlayDiagY : overlayMainY;
+    int16_t oh = show_diagnostics ? overlayDiagH : overlayMainH;
+
+    uint16_t bg_color   = is_active ? ILI9341_RED : ILI9341_YELLOW;
+    uint16_t text_color = is_active ? WHITE        : ILI9341_BLACK;
+
+    GFX_fillRect(0, oy, PDL_WIDTH, oh, bg_color);
+
+    const char *fault_name = "";
+    const char *action     = "";
+
+    switch (fault)
+    {
+    case CriticalFault::Contactor:
+        fault_name = "CONTACTOR FAULT";
+        action     = "ESTOP + EXIT CAR, BATTERY LIVE";
+        break;
+    case CriticalFault::Isolation:
+        fault_name = "ISOLATION FAULT";
+        action     = "ESTOP + EXIT CAR, CHASSIS LIVE";
+        break;
+    case CriticalFault::BmsNonOp:
+        fault_name = "BMS NON-OPERATIONAL";
+        action     = "ESTOP + EXIT CAR, BMS ERROR";
+        break;
+    case CriticalFault::AuxBattery:
+        fault_name = "AUX BATTERY FAULT";
+        action     = "TURN OFF, AUX ERROR";
+        break;
+    default:
+        return;
+    }
+
+    uint16_t old_bgcolor = bgcolor;
+    bgcolor = bg_color;
+
+    const int16_t line_h = 20;
+
+    if (is_active) {
+        // Two-line layout: fault name + action, centred with generous gap.
+        const int16_t gap       = 12;
+        const int16_t content_h = line_h + gap + line_h;
+        int16_t y_name   = oy + (oh - content_h) / 2;
+        int16_t y_action = y_name + line_h + gap;
+        pdl_draw_text(PDL_WIDTH / 2, y_name,   MF_ALIGN_CENTER, FNTSMALL, text_color, fault_name);
+        pdl_draw_text(PDL_WIDTH / 2, y_action, MF_ALIGN_CENTER, FNTSMALL, text_color, action);
+    } else {
+        // Three-line layout: fault name + action + "LATCHED", tighter gap to fit in overlay.
+        const int16_t gap       = 6;
+        const int16_t content_h = line_h + gap + line_h + gap + line_h;
+        int16_t y_name   = oy + (oh - content_h) / 2;
+        int16_t y_action = y_name + line_h + gap;
+        int16_t y_status = y_action + line_h + gap;
+        pdl_draw_text(PDL_WIDTH / 2, y_name,   MF_ALIGN_CENTER, FNTSMALL, text_color, fault_name);
+        pdl_draw_text(PDL_WIDTH / 2, y_action, MF_ALIGN_CENTER, FNTSMALL, text_color, action);
+        pdl_draw_text(PDL_WIDTH / 2, y_status, MF_ALIGN_CENTER, FNTSMALL, text_color, "LATCHED");
+    }
+
+    bgcolor = old_bgcolor;
+}
+
 // ─── Top-level draw ───────────────────────────────────────────────────────────
 
 void pdl_draw(const PDLInfo *info)
@@ -488,6 +698,15 @@ void pdl_draw(const PDLInfo *info)
         pdl_draw_diagnostics_page(info);
     else
         pdl_draw_main_page(info);
+
+    // Get active faults before latched faults
+    CriticalFault active = pdl_get_critical_fault(info);
+    if (active != CriticalFault::None) {
+        s_latched_fault = active;
+        pdl_draw_critical_overlay(active, info->show_diagnostics, true);
+    }
+    else if (s_latched_fault != CriticalFault::None)
+        pdl_draw_critical_overlay(s_latched_fault, info->show_diagnostics, false);
 
     // Warning banner (same on both pages)
     const char *warning = pdl_get_warning_message(info);

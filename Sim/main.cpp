@@ -1,3 +1,4 @@
+#include "artemis_canid.hpp"
 #include "ili9341.h"
 #include "gfx.h"
 #include "fonts.h"
@@ -8,12 +9,14 @@
 #ifdef SIMULATION
 #include "picosdk_sim.h"
 #include "raylib.h"
-#include "math.h"
+#include <math.h>
 #else
 #include "pico/stdio.h"
 #include "pico/time.h"
 #include "hardware/gpio.h"
 #endif
+
+
 
 #include <stdio.h>
 
@@ -32,7 +35,7 @@ static PDLInfo get_info(void) {
 
     /* BMS Safety Critical (0x200)
        bit 0 = DischargeRelayEnabled, bit 6 = IsReadyStatus */
-    info.bms_relay_state1 = (1u << 0) | (1u << 6);
+    info.bms_relay_state1 = sbit(BmsRelayState1::DischargeRelayEnabled) | (1u << 6);
     info.battery_soc      = 85;
 
     /* BMS Pack Voltage and Energy (0x201) — raw BMS scaling */
@@ -63,6 +66,39 @@ static PDLInfo get_info(void) {
 
     /* Alternate pages every 8 seconds so both are visible in the demo */
     info.show_diagnostics = (fmod(t, 16.0) >= 8.0);
+
+    /* Power hold: active during seconds 4–12 of each 16 s cycle; setpoint ramps 10→19 A */
+    double cycle = fmod(t, 16.0);
+    info.power_hold_enabled = (cycle >= 4.0 && cycle < 12.0);
+    info.power_hold_amps    = (uint8_t)(10 + (uint8_t)(9.0 * (cycle - 4.0) / 8.0));
+
+    /* ── Critical fault injection ───────────────────────────────────────────────
+     * Cycle: 5 s each fault, then 5 s clean.  The page-flip above runs on its
+     * own 16 s cadence, so each fault is visible on both the main and diag page
+     * naturally without extra coordination.
+     *
+     * The contactor fault has a real 250 ms timer in pdl_get_critical_fault(); the
+     * overlay will appear ~0.3 s after phase 2 starts and clear instantly when it
+     * ends.  Latching means cleared faults remain visible (yellow) in subsequent
+     * phases, so the 5 s "clean" window at the end shows the last latched fault. */
+    {
+        double fault_t = fmod(t, 25.0);
+
+        if (fault_t < 5.0) {
+            /* Phase 1 — isolation fault */
+            info.bms_dtc_flags2_2 |= sbit(BmsDtcFlags22::HighVoltageIsolationFault);
+        } else if (fault_t < 10.0) {
+            /* Phase 2 — contactor fault: discharge relay open while HV present */
+            info.bms_relay_state1 &= ~sbit(BmsRelayState1::DischargeRelayEnabled);
+        } else if (fault_t < 15.0) {
+            /* Phase 3 — BMS non-operational (P0A09 internal hardware fault) */
+            info.bms_dtc_flags1 |= sbit(BmsDtcFlags1::InternalHardwareFault);
+        } else if (fault_t < 20.0) {
+            /* Phase 4 — aux battery fault (aux overvoltage error) */
+            info.aux_status |= sbit(DistroDisplayAux::AuxOverVoltageError);
+        }
+        /* Phase 5 (20–25 s): no injected fault — latched fault from phase 4 shown yellow */
+    }
 
     return info;
 }

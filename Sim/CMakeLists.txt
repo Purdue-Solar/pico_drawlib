@@ -43,7 +43,7 @@ endif()
 # which requires pico multicore headers unavailable in the simulation.
 
 set(SIM_SOURCES
-    main.c
+    main.cpp
     picosdk_sim.c
     ili9341_sim.c
 )
