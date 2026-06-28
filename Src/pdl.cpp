@@ -3,13 +3,6 @@
 #include "pdl.hpp"
 #include "artemis_canid.hpp"
 
-#ifndef SIMULATION
-extern "C" 
-{
-#include "pico/time.h"
-}
-#endif
-
 extern "C"
 {
 #include "fonts.h"
@@ -298,13 +291,13 @@ static void pdl_draw_monitor_stats(
     uint16_t auxHwFault  = (data & sbit(DMi::AuxHardwareDetectedFault))  ? ILI9341_ORANGE : ILI9341_GREEN;
     uint16_t commsFault  = (data & (sbit(DMi::MainPowerMonitorI2cError) |
                                     sbit(DMi::AuxPowerMonitorI2cError))) ? ILI9341_ORANGE : ILI9341_GREEN;
-    uint16_t debugFault  = ILI9341_GREEN; 
+    uint16_t distroBad   = (data & sbit(DMi::DistroBad)) ? ILI9341_ORANGE : ILI9341_GREEN;
 
     pdl_draw_stat("MF", mainHwFault, x1, y, align1);
     pdl_draw_stat("AF", auxHwFault,  x2, y, align2);
     y += 40;
     pdl_draw_stat("CF", commsFault,  x1, y, align1);
-    pdl_draw_stat("DF", debugFault,  x2, y, align2);
+    pdl_draw_stat("DB", distroBad,   x2, y, align2);
 }
 
 // ─── Page-specific helpers ────────────────────────────────────────────────────
@@ -316,15 +309,15 @@ static const char *pdl_get_vehicle_state(const PDLInfo *info)
     using RS1 = BmsRelayState1;
     using DMi = DistroDisplayMisc;
 
-    const uint8_t monitor_fault_mask = sbit(DMi::MainHardwareDetectedFault) |
+    const uint8_t monitor_fault_mask = sbit(DMi::DistroBad)                 |
+                                       sbit(DMi::MainHardwareDetectedFault) |
                                        sbit(DMi::AuxHardwareDetectedFault)  |
                                        sbit(DMi::MainPowerMonitorI2cError)  |
                                        sbit(DMi::AuxPowerMonitorI2cError);
 
     bool discharge_enabled = (info->bms_relay_state1 & sbit(RS1::DischargeRelayEnabled)) != 0;
     bool monitor_fault     = (info->monitor_status & monitor_fault_mask) != 0;
-    // monitor_status bit 4 (PowerDistroWatchdog) is repurposed as precharge resistor active
-    bool precharge_active  = (info->monitor_status >> 4) & 1;
+    bool precharge_active  = (info->monitor_status & sbit(DMi::PowerDistroPrecharge)) != 0;
 
     if (monitor_fault || !discharge_enabled)
         return "Fault";
@@ -497,55 +490,6 @@ enum class CriticalFault : uint8_t
     AuxBattery,
 };
 
-#ifdef SIMULATION
-static uint32_t pdl_get_time_ms()
-{
-    static uint32_t t = 0;
-    return t += 16;
-}
-#else
-static uint32_t pdl_get_time_ms()
-{
-    return to_ms_since_boot(get_absolute_time());
-}
-#endif
-
-static bool     s_contactor_timer_running = false;
-static uint32_t s_contactor_open_since_ms = 0;
-
-// Returns true when we have reliable evidence the contactors are open.
-// Staleness-guarded so zero-initialised fields don't cause a false alarm at boot.
-static bool pdl_contactor_is_open(const PDLInfo *info)
-{
-    using RS1 = BmsRelayState1;
-    using DM  = DistroDisplayMain;
-    using DA  = DistroDisplayAux;
-    using DMi = DistroDisplayMisc;
-
-    bool bms_open = !info->bms_safety_stale &&
-                    !(info->bms_relay_state1 & sbit(RS1::DischargeRelayEnabled));
-
-    const uint8_t main_err = sbit(DM::MainOverVoltageError)      |
-                             sbit(DM::MainUnderVoltageError)      |
-                             sbit(DM::MainOverCurrentError)       |
-                             sbit(DM::MainUnderCurrentError);
-    const uint8_t aux_err  = sbit(DA::AuxOverVoltageError)       |
-                             sbit(DA::AuxUnderVoltageError)       |
-                             sbit(DA::AuxOverCurrentError)        |
-                             sbit(DA::AuxUnderCurrentError);
-    const uint8_t mon_err  = sbit(DMi::MainHardwareDetectedFault) |
-                             sbit(DMi::AuxHardwareDetectedFault)  |
-                             sbit(DMi::MainPowerMonitorI2cError)  |
-                             sbit(DMi::AuxPowerMonitorI2cError);
-
-    bool distro_fault = !info->power_distro_stale &&
-                        ((info->main_status    & main_err) ||
-                         (info->aux_status     & aux_err)  ||
-                         (info->monitor_status & mon_err));
-
-    return bms_open || distro_fault;
-}
-
 static CriticalFault pdl_get_critical_fault(const PDLInfo *info)
 {
     using D1  = BmsDtcFlags1;
@@ -554,29 +498,13 @@ static CriticalFault pdl_get_critical_fault(const PDLInfo *info)
     using DA  = DistroDisplayAux;
     using DMi = DistroDisplayMisc;
 
-    // 1. Contactor fault — triggers 250 ms after contactors open with HV still present
-    // Note that this check is only possible when there is a prexisting fault
-    {
-        bool hv_present = !info->mc_bus_stale &&
-                          (info->motor_bus_voltage > 10.0f);
-        bool open = pdl_contactor_is_open(info);
-
-        if (open && hv_present) {
-            uint32_t now = pdl_get_time_ms();
-            if (!s_contactor_timer_running) {
-                s_contactor_open_since_ms = now;
-                s_contactor_timer_running = true;
-            } else if (now - s_contactor_open_since_ms >= 250u) {
-                return CriticalFault::Contactor;
-            }
-        } else {
-            s_contactor_timer_running = false;
-        }
-    }
-
-    // 2. Isolation fault
+    // 1. Isolation fault — highest priority
     if (info->bms_dtc_flags2_2 & sbit(D22::HighVoltageIsolationFault))
         return CriticalFault::Isolation;
+
+    // 2. Contactor fault — power distro board sets this bit when it detects the fault
+    if (!info->power_distro_stale && (info->monitor_status & sbit(DMi::ContactorFault)))
+        return CriticalFault::Contactor;
 
     // 3. BMS non-operational (OBD-II codes P0A07, P0A09, P0A0B, P0A1F, P0A04, P0AC0, P0A0F, P0560, P0A05)
     {

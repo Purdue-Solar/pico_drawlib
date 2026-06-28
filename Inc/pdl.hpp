@@ -64,7 +64,7 @@ typedef struct PDLInfo
     uint16_t current_limits_status;  // Current limits status bitfield
 
     // ── Power Distro Display (0x300) ────────────────────────────────
-    uint8_t monitor_status;  // power monitor flags — bit 4 repurposed as precharge active
+    uint8_t monitor_status;  // power monitor flags (DistroDisplayMisc bit positions)
     uint8_t main_status;     // main LV output flags
     uint8_t aux_status;      // aux LV output flags
 

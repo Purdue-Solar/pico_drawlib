@@ -93,12 +93,12 @@ Critical faults are evaluated in the order below; the first matching condition i
 
 | Priority | Overlay Text | Trigger condition | Driver action |
 |----------|--------------|-------------------|---------------|
-| 1 | **CONTACTOR FAULT** | Discharge relay disabled (BMS `BmsRelayState1::DischargeRelayEnabled` clear) **or** any error bit (0–3) set in `main_status`, `aux_status`, or `monitor_status` — **and** bus voltage > 10 V or bus current > 100 mA — sustained for **250 ms** | ESTOP + EXIT CAR, BATTERY LIVE |
-| 2 | **ISOLATION FAULT** | `bms_dtc_flags2_2` bit `HighVoltageIsolationFault` | ESTOP + EXIT CAR, CHASSIS LIVE |
+| 1 | **ISOLATION FAULT** | `bms_dtc_flags2_2` bit `HighVoltageIsolationFault` | ESTOP + EXIT CAR, CHASSIS LIVE |
+| 2 | **CONTACTOR FAULT** | `monitor_status` bit `ContactorFault` (`DistroDisplayMisc::ContactorFault`, set by the power distro board) | ESTOP + EXIT CAR, BATTERY LIVE |
 | 3 | **BMS NON-OPERATIONAL** | Any OBD-II code in the table below | ESTOP + EXIT CAR, BMS ERROR |
 | 4 | **AUX BATTERY FAULT** | Any error bit (0–3) in `aux_status`, or `AuxHardwareDetectedFault` / `AuxPowerMonitorI2cError` in `monitor_status` | TURN OFF, AUX ERROR |
 
-> Contactor fault has a 250 ms debounce timer. Both BMS relay state and power distro board error bits are checked; either source alone is sufficient. The check is suppressed when the relevant CAN message is stale to avoid false alarms at boot.
+> The contactor fault is detected and timed by the power distro board, which sets `DistroDisplayMisc::ContactorFault` (bit 6 of `monitor_status`). The steering wheel checks this single bit with a staleness guard so false alarms cannot occur at boot.
 
 #### BMS Non-Operational — OBD-II code mapping
 
@@ -113,6 +113,24 @@ Critical faults are evaluated in the order below; the first matching condition i
 | P0A0F | Cell ASIC Fault | `bms_dtc_flags2_1` | `BmsDtcFlags21::CellAsicFault` |
 | P0560 | Redundant Power Supply Fault | `bms_dtc_flags2_2` | `BmsDtcFlags22::RedundantPowerSupplyFault` |
 | P0A05 | Input Power Supply Fault | `bms_dtc_flags2_2` | `BmsDtcFlags22::InputPowerSupplyFault` |
+
+---
+
+---
+
+### Acceleration Enable
+
+The motor current/velocity command (`0x501 MotorCurrentVelocityControl`) is sent to zero when **any** of the following conditions is true. All three sources must be simultaneously healthy for the pedal to drive the motor.
+
+| Condition | Source | Field(s) checked |
+|-----------|--------|-----------------|
+| Motor controller has error flags | MC errors CAN message (`mc_errors_stale` + `mc_error_flags1` / `mc_error_flags2`) | Any bit non-zero in either byte inhibits acceleration |
+| BMS discharge relay disabled | BMS safety message (`bms_safety_stale` + `bms_relay_state1`) | `BmsRelayState1::DischargeRelayEnabled` must be set |
+| Power distro reports bad state | Power distro display message (`power_distro_stale` + `monitor_status`) | `DistroDisplayMisc::DistroBad` (bit 0) must be clear |
+
+Stale CAN data (message not received within 3× its nominal period) counts as unsafe — acceleration is inhibited until fresh data arrives. This prevents driving with no visibility into motor, BMS, or distro state.
+
+Power hold is cancelled by the brake pedal (`Accelerator::update`) and shares the same `accel_permitted` gate, so it cannot produce torque when the above conditions are not met.
 
 ---
 

@@ -77,10 +77,10 @@ static PDLInfo get_info(void) {
      * own 16 s cadence, so each fault is visible on both the main and diag page
      * naturally without extra coordination.
      *
-     * The contactor fault has a real 250 ms timer in pdl_get_critical_fault(); the
-     * overlay will appear ~0.3 s after phase 2 starts and clear instantly when it
-     * ends.  Latching means cleared faults remain visible (yellow) in subsequent
-     * phases, so the 5 s "clean" window at the end shows the last latched fault. */
+     * The contactor fault is set directly by the power distro board (ContactorFault bit
+     * in monitor_status); it clears instantly when the phase ends.  Latching means
+     * cleared faults remain visible (yellow) in subsequent phases, so the 5 s "clean"
+     * window at the end shows the last latched fault. */
     {
         double fault_t = fmod(t, 25.0);
 
@@ -88,8 +88,8 @@ static PDLInfo get_info(void) {
             /* Phase 1 — isolation fault */
             info.bms_dtc_flags2_2 |= sbit(BmsDtcFlags22::HighVoltageIsolationFault);
         } else if (fault_t < 10.0) {
-            /* Phase 2 — contactor fault: discharge relay open while HV present */
-            info.bms_relay_state1 &= ~sbit(BmsRelayState1::DischargeRelayEnabled);
+            /* Phase 2 — contactor fault: power distro board reports contactor fault */
+            info.monitor_status |= sbit(DistroDisplayMisc::ContactorFault);
         } else if (fault_t < 15.0) {
             /* Phase 3 — BMS non-operational (P0A09 internal hardware fault) */
             info.bms_dtc_flags1 |= sbit(BmsDtcFlags1::InternalHardwareFault);
