@@ -150,18 +150,14 @@ const char *pdl_get_warning_message(const PDLInfo *info)
             return "BMS Fault";
     }
 
-    // Motor fault (error flags bits 16–32)
-    if (info->mc_error_flags1 || info->mc_error_flags2)
-        return "Motor Controller Fault";
-
-    // Motor temp error (IPM/motor temperature limit active)
-    if (info->mc_limit_flags & sbit(ML::IpmMotorTemperature))
-        return "Motor Temp Limit";
-
     // Aux LV fault (hardware or comms)
     if ((info->monitor_status & sbit(DMi::AuxHardwareDetectedFault)) ||
         (info->monitor_status & sbit(DMi::AuxPowerMonitorI2cError)))
         return "Aux LV Fault";
+
+    // Motor fault (error flags bits 16–32)
+    if (info->mc_error_flags1 || info->mc_error_flags2)
+        return "Motor Controller Fault";
 
     // Main LV fault (hardware or comms)
     if ((info->monitor_status & sbit(DMi::MainHardwareDetectedFault)) ||
@@ -177,6 +173,10 @@ const char *pdl_get_warning_message(const PDLInfo *info)
     if (info->aux_status & sbit(DA::AuxUnderVoltageWarning)) return "Aux LV Undervoltage WARN";
     if (info->aux_status & sbit(DA::AuxOverCurrentWarning))  return "Aux LV Overcurrent WARN";
     if (info->aux_status & sbit(DA::AuxUnderCurrentWarning)) return "Aux LV Undercurrent WARN";
+
+     // Motor temp warning (IPM/motor temperature limit active)
+    if (info->mc_limit_flags & sbit(ML::IpmMotorTemperature))
+        return "Motor Temp Limit";
 
     // Main LV over/under voltage and current (errors before warnings)
     if (info->main_status & sbit(DM::MainOverVoltageError))    return "Main LV Overvoltage ERROR";
