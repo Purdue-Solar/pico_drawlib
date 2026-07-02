@@ -128,7 +128,7 @@ The motor current/velocity command (`0x501 MotorCurrentVelocityControl`) is sent
 | BMS discharge relay disabled | BMS safety message (`bms_safety_stale` + `bms_relay_state1`) | `BmsRelayState1::DischargeRelayEnabled` must be set |
 | Power distro reports bad state | Power distro display message (`power_distro_stale` + `monitor_status`) | `DistroDisplayMisc::DistroBad` (bit 0) must be clear |
 
-Stale CAN data (message not received within 3× its nominal period) counts as unsafe — acceleration is inhibited until fresh data arrives. This prevents driving with no visibility into motor, BMS, or distro state.
+Stale CAN data (message not received within 3× its nominal period) counts as unsafe — acceleration is inhibited until fresh data arrives. This prevents driving with no visibility into motor, BMS, or distro state. Also note that "DistroBad" is meant to indicate when the car is not safe to drive - including precharge. 
 
 Power hold is cancelled by the brake pedal (`Accelerator::update`) and shares the same `accel_permitted` gate, so it cannot produce torque when the above conditions are not met.
 

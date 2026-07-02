@@ -309,8 +309,7 @@ static const char *pdl_get_vehicle_state(const PDLInfo *info)
     using RS1 = BmsRelayState1;
     using DMi = DistroDisplayMisc;
 
-    const uint8_t monitor_fault_mask = sbit(DMi::DistroBad)                 |
-                                       sbit(DMi::MainHardwareDetectedFault) |
+    const uint8_t monitor_fault_mask = sbit(DMi::MainHardwareDetectedFault) |
                                        sbit(DMi::AuxHardwareDetectedFault)  |
                                        sbit(DMi::MainPowerMonitorI2cError)  |
                                        sbit(DMi::AuxPowerMonitorI2cError);
