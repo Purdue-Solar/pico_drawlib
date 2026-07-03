@@ -157,25 +157,28 @@ const char *pdl_get_warning_message(const PDLInfo *info)
         (info->monitor_status & sbit(DMi::MainPowerMonitorI2cError)))
         return "Main LV Fault";
 
-    // Aux LV over/under voltage and current (errors before warnings)
+    // Aux LV over/under voltage and current errors
     if (info->aux_status & sbit(DA::AuxOverVoltageError))    return "Aux LV Overvoltage ERROR";
     if (info->aux_status & sbit(DA::AuxUnderVoltageError))   return "Aux LV Undervoltage ERROR";
     if (info->aux_status & sbit(DA::AuxOverCurrentError))    return "Aux LV Overcurrent ERROR";
     if (info->aux_status & sbit(DA::AuxUnderCurrentError))   return "Aux LV Undercurrent ERROR";
-    if (info->aux_status & sbit(DA::AuxOverVoltageWarning))  return "Aux LV Overvoltage WARN";
-    if (info->aux_status & sbit(DA::AuxUnderVoltageWarning)) return "Aux LV Undervoltage WARN";
-    if (info->aux_status & sbit(DA::AuxOverCurrentWarning))  return "Aux LV Overcurrent WARN";
-    if (info->aux_status & sbit(DA::AuxUnderCurrentWarning)) return "Aux LV Undercurrent WARN";
+    // Main LV over/under voltage and current errors
+    if (info->main_status & sbit(DM::MainOverVoltageError))    return "Main LV Overvoltage ERROR";
+    if (info->main_status & sbit(DM::MainUnderVoltageError))   return "Main LV Undervoltage ERROR";
+    if (info->main_status & sbit(DM::MainOverCurrentError))    return "Main LV Overcurrent ERROR";
+    if (info->main_status & sbit(DM::MainUnderCurrentError))   return "Main LV Undercurrent ERROR";
 
      // Motor temp warning (IPM/motor temperature limit active)
     if (info->mc_limit_flags & sbit(ML::IpmMotorTemperature))
         return "Motor Temp Limit";
 
-    // Main LV over/under voltage and current (errors before warnings)
-    if (info->main_status & sbit(DM::MainOverVoltageError))    return "Main LV Overvoltage ERROR";
-    if (info->main_status & sbit(DM::MainUnderVoltageError))   return "Main LV Undervoltage ERROR";
-    if (info->main_status & sbit(DM::MainOverCurrentError))    return "Main LV Overcurrent ERROR";
-    if (info->main_status & sbit(DM::MainUnderCurrentError))   return "Main LV Undercurrent ERROR";
+    // Aux LV over/under voltage and current warnings
+    if (info->aux_status & sbit(DA::AuxOverVoltageWarning))  return "Aux LV Overvoltage WARN";
+    if (info->aux_status & sbit(DA::AuxUnderVoltageWarning)) return "Aux LV Undervoltage WARN";
+    if (info->aux_status & sbit(DA::AuxOverCurrentWarning))  return "Aux LV Overcurrent WARN";
+    if (info->aux_status & sbit(DA::AuxUnderCurrentWarning)) return "Aux LV Undercurrent WARN";
+    
+    // Main LV over/under voltage and current warnings
     if (info->main_status & sbit(DM::MainOverVoltageWarning))  return "Main LV Overvoltage WARN";
     if (info->main_status & sbit(DM::MainUnderVoltageWarning)) return "Main LV Undervoltage WARN";
     if (info->main_status & sbit(DM::MainOverCurrentWarning))  return "Main LV Overcurrent WARN";
