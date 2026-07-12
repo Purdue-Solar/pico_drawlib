@@ -48,16 +48,6 @@ const uint8_t initcmd[] = {
 	0x00				  // End of list
 };
 
-#ifdef USE_DMA
-uint dma_tx;
-dma_channel_config dma_cfg;
-void waitForDMA()
-{
-
-	dma_channel_wait_for_finish_blocking(dma_tx);
-}
-#endif
-
 void LCD_setPins(uint16_t dc, uint16_t cs, int16_t rst, uint16_t sck, uint16_t tx)
 {
 	ili9341_pinDC = dc;
@@ -93,13 +83,6 @@ void initSPI()
 		gpio_set_dir(ili9341_pinRST, GPIO_OUT);
 		gpio_put(ili9341_pinRST, 1);
 	}
-
-#ifdef USE_DMA
-	dma_tx = dma_claim_unused_channel(true);
-	dma_cfg = dma_channel_get_default_config(dma_tx);
-	channel_config_set_transfer_data_size(&dma_cfg, DMA_SIZE_16);
-	channel_config_set_dreq(&dma_cfg, spi_get_dreq(ili9341_spi, true));
-#endif
 }
 
 void ILI9341_Reset()
@@ -247,17 +230,8 @@ void LCD_WriteBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *b
 	LCD_setAddrWindow(x, y, w, h); // Clipped area
 	ILI9341_RegData();
 	spi_set_format(ili9341_spi, 16, SPI_CPOL_1, SPI_CPOL_1, SPI_MSB_FIRST);
-#ifdef USE_DMA
-	dma_channel_configure(dma_tx, &dma_cfg,
-						  &spi_get_hw(ili9341_spi)->dr, // write address
-						  bitmap,						// read address
-						  w * h,						// element count (each element is of size transfer_data_size)
-						  true);						// start asap
-	waitForDMA();
-#else
 
 	spi_write16_blocking(ili9341_spi, bitmap, w * h);
-#endif
 
 	ILI9341_DeSelect();
 }
