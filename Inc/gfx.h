@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-void GFX_DrawIcon(uint8_t* icon, uint x, uint y, uint width, uint height, uint16_t color);
+void GFX_DrawIcon(const uint8_t* icon, uint x, uint y, uint width, uint height, uint16_t color);
 
 void GFX_createFramebuf();
 void GFX_destroyFramebuf();

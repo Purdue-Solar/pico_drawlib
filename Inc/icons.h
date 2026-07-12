@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-extern uint8_t warning_icon[];
+extern const uint8_t warning_icon[];
 extern const int warning_icon_width;
 extern const int warning_icon_height;
 
