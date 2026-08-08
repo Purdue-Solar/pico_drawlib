@@ -8,9 +8,6 @@
 #include "hardware/spi.h"
 #endif
 
-// Use DMA?
-// #define USE_DMA 1
-
 #define MADCTL_MY 0x80  ///< Bottom to top
 #define MADCTL_MX 0x40  ///< Right to left
 #define MADCTL_MV 0x20  ///< Reverse Mode
@@ -109,10 +106,16 @@ extern "C"
 #endif
 
 #ifdef SIMULATION
+#ifdef __cplusplus
+extern "C" {
+#endif
 void LCDSim_InitWindow(void);
 int LCDSim_WindowShouldClose(void);
 void LCDSim_CloseWindow(void);
 void LCDSim_Redraw(void);
+#ifdef __cplusplus
+}
+#endif
 #endif
 
 #endif

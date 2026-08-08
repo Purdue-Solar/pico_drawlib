@@ -4,7 +4,7 @@
 const int warning_icon_width  = 32;
 const int warning_icon_height = 32;
 
-uint8_t warning_icon[] = {
+const uint8_t warning_icon[] = {
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
